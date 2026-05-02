@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Talent RAG - Ranking por Competencias</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">IA Generativa + RAG</p>
+      <h1>Evaluador de candidatos por competencias</h1>
+      <p class="subtitle">
+        Selecciona un anuncio laboral y los CV disponibles. El sistema deduce competencias,
+        busca evidencia documental y genera una terna recomendada.
+      </p>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="card wide model-status-card">
+      <h2>Estado del modelo IA</h2>
+      <div id="llmStatus" class="llm-status loading">Verificando configuración del modelo...</div>
+      <div class="model-selector">
+        <label for="modelSelect">Modelo GitHub Models para este análisis</label>
+        <select id="modelSelect"></select>
+        <p id="modelDescription" class="hint">Cargando modelos disponibles...</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>1. Anuncio laboral</h2>
+      <label for="announcementSelect">Anuncio disponible</label>
+      <select id="announcementSelect"></select>
+      <button id="extractBtn" class="secondary">Extraer texto del anuncio</button>
+      <p class="hint">Si el OCR no funciona, pega aquí el texto del anuncio.</p>
+      <textarea id="announcementText" placeholder="Texto del anuncio laboral..."></textarea>
+    </section>
+
+    <section class="card">
+      <h2>2. CV postulantes</h2>
+      <div id="cvList" class="checkbox-list"></div>
+      <div class="row">
+        <label for="ternaSize">Tamaño de terna</label>
+        <input id="ternaSize" type="number" min="1" max="10" value="3" />
+      </div>
+      <button id="analyzeBtn" class="primary">Analizar y generar ranking</button>
+      <p id="status" class="status"></p>
+
+      <div id="progressPanel" class="progress-panel hidden">
+        <div class="progress-header">
+          <strong>Progreso del análisis</strong>
+          <span id="progressPercent">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
+        </div>
+        <p id="progressStep" class="progress-step">Esperando inicio...</p>
+        <div class="progress-metrics">
+          <span id="llmSuccessCount">LLM OK: 0</span>
+          <span id="llmFallbackCount">Fallback: 0</span>
+          <span id="llmErrorCount">Errores: 0</span>
+        </div>
+        <div class="progress-events-title" id="progressEventsHeader">Bitácora completa de ejecución (0 eventos)</div>
+        <div id="progressEvents" class="progress-events"></div>
+      </div>
+    </section>
+
+    <section class="card wide">
+      <h2>3. Competencias deducidas</h2>
+      <div id="competencies" class="table-container empty">Sin análisis todavía.</div>
+    </section>
+
+    <section class="card wide">
+      <h2>4. Terna recomendada</h2>
+      <div id="terna" class="ranking-grid empty">Sin resultados todavía.</div>
+    </section>
+
+    <section class="card wide">
+      <h2>5. Ranking completo con evidencias</h2>
+      <div id="ranking" class="ranking-list empty">Sin resultados todavía.</div>
+    </section>
+
+    <section class="card wide">
+      <h2>6. Reporte local generado</h2>
+      <div id="report" class="report-box empty">Sin reporte todavía.</div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

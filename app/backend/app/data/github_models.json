@@ -1,0 +1,32 @@
+[
+  {
+    "id": "openai/gpt-4o-mini",
+    "name": "GPT-4o mini",
+    "provider": "OpenAI",
+    "description": "Modelo liviano por defecto. Buen rendimiento para JSON y extracción estructurada.",
+    "default": true
+  },
+  {
+    "id": "meta/Meta-Llama-3.1-8B-Instruct",
+    "name": "Meta Llama 3.1 8B Instruct",
+    "provider": "Meta",
+    "description": "Modelo de código abierto con buen rendimiento en tareas de comprensión y generación de texto.",
+    "default": false
+  },
+  {
+    "id": "microsoft/Phi-4-mini-instruct",
+    "name": "Phi-4 mini instruct",
+    "provider": "Microsoft",
+    "description": "Modelo de Microsoft optimizado para tareas de instrucción, con buen rendimiento en generación de texto y comprensión.",
+    "default": false
+  },
+  {
+    "id": "deepseek/DeepSeek-V3-0324",
+    "name": "DeepSeek V3 0324",
+    "provider": "DeepSeek",
+    "description": "Modelo de DeepSeek con buen rendimiento en tareas de comprensión y generación de texto, especialmente en contextos técnicos.",
+    "default": false
+  }
+
+
+]

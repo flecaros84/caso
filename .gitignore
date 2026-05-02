@@ -1,0 +1,138 @@
+# =========================
+# Variables de entorno / secretos
+# =========================
+.env
+.env.*
+*.env
+local.properties
+config.ini
+*.pem
+*.key
+*.crt
+
+# Permitir archivos de ejemplo si decides agregarlos
+!.env.example
+!config.example.ini
+
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+ENV/
+
+
+# =========================
+# FastAPI / Uvicorn / logs
+# =========================
+*.log
+logs/
+uvicorn.log
+
+
+# =========================
+# Archivos generados por la aplicación
+# =========================
+app/backend/outputs/
+app/backend/tmp/
+app/backend/temp/
+app/backend/cache/
+
+# Si quieres mantener la carpeta outputs en Git, puedes crear:
+# app/backend/outputs/.gitkeep
+# y luego agregar esta excepción:
+!app/backend/outputs/.gitkeep
+
+
+# =========================
+# Modelos, embeddings y cachés locales
+# =========================
+.sentence_transformers/
+.cache/
+model_cache/
+embeddings/
+vectorstore/
+faiss_index/
+*.index
+*.pkl
+*.pickle
+*.joblib
+
+
+# =========================
+# Node / Frontend, por si usas npm más adelante
+# =========================
+node_modules/
+dist/
+build/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+
+# =========================
+# Sistema operativo
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+
+# =========================
+# VS Code / IDE
+# =========================
+.vscode/
+.idea/
+*.code-workspace
+
+# Si quieres compartir configuración útil de VS Code,
+# puedes quitar .vscode/ y usar excepciones específicas.
+
+
+# =========================
+# Archivos comprimidos y backups
+# =========================
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+*.bak
+*.backup
+*.tmp
+
+
+# =========================
+# Documentos temporales de Office
+# =========================
+~$*.docx
+~$*.xlsx
+~$*.pptx
+
+
+# =========================
+# Datos sensibles opcionales
+# =========================
+# OJO:
+# No ignores resources/ completo si quieres subir el caso con archivos de prueba.
+# Pero si dentro de resources tienes CV reales o datos sensibles, ignora esas carpetas:
+
+resources/pdf/cv
+# resources/sensibles/
