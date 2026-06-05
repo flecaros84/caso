@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
@@ -71,10 +71,11 @@ class LLMStatus(BaseModel):
 
 
 class AnalysisResponse(BaseModel):
-    announcement_id: str
+    announcement_name: str
     competencies: list[Competency]
+    candidates: list[CandidateEvaluation]
     ranking: list[CandidateEvaluation]
-    terna: list[CandidateEvaluation]
-    ethical_notes: list[str]
-    llm_status: LLMStatus | None = None
-    report: dict[str, str] | None = None
+    recommended_terna: list[CandidateEvaluation]
+    report: dict | None = None
+    progress_log: list[str] = []
+    agent_trace: dict[str, Any] | None = None

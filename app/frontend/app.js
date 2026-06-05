@@ -5,7 +5,8 @@ const state = {
   models: [],
   defaultModel: null,
   currentJobId: null,
-  progressTimer: null
+  progressTimer: null,
+  useAgentFlow: false
 };
 
 const $ = (id) => document.getElementById(id);
@@ -72,6 +73,26 @@ function renderModelSelector() {
 function getSelectedModel() {
   const select = $("modelSelect");
   return select?.value || state.defaultModel || state.llmStatus?.model || null;
+}
+
+function getAnalysisEndpoints() {
+  const useAgentFlow = Boolean($("useAgentFlow")?.checked);
+
+  if (useAgentFlow) {
+    return {
+      start: "/api/agent/analyze/start",
+      status: (jobId) => `/api/agent/analyze/status/${jobId}`,
+      result: (jobId) => `/api/agent/analyze/result/${jobId}`,
+      label: "agente LangChain"
+    };
+  }
+
+  return {
+    start: "/api/analyze/start",
+    status: (jobId) => `/api/analyze/status/${jobId}`,
+    result: (jobId) => `/api/analyze/result/${jobId}`,
+    label: "flujo clásico"
+  };
 }
 
 function updateModelDescription() {
@@ -202,23 +223,25 @@ async function analyze() {
     return;
   }
 
+  const endpoints = getAnalysisEndpoints();
+
   clearPreviousResults();
   showProgressPanel();
   updateProgressUI({
     status: "queued",
     progress: 0,
-    current_step: "Enviando análisis al backend...",
+    current_step: `Enviando análisis al backend usando ${endpoints.label}...`,
     llm_success: 0,
     llm_fallback: 0,
     llm_errors: 0,
     events: [],
     event_count: 0
   });
-  setStatus("Análisis iniciado. Puedes seguir el avance en la barra de progreso.");
+  setStatus(`Análisis iniciado usando ${endpoints.label}. Puedes seguir el avance en la barra de progreso.`);
   $("analyzeBtn").disabled = true;
 
   try {
-    const startResponse = await api("/api/analyze/start", {
+    const startResponse = await api(endpoints.start, {
       method: "POST",
       body: JSON.stringify({
         announcement_id: announcementId,
@@ -230,13 +253,13 @@ async function analyze() {
     });
 
     state.currentJobId = startResponse.job_id;
-    await pollAnalysisProgress(state.currentJobId);
+    await pollAnalysisProgress(state.currentJobId, endpoints);
   } finally {
     $("analyzeBtn").disabled = false;
   }
 }
 
-async function pollAnalysisProgress(jobId) {
+async function pollAnalysisProgress(jobId, endpoints) {
   return new Promise((resolve, reject) => {
     if (state.progressTimer) {
       clearInterval(state.progressTimer);
@@ -244,22 +267,25 @@ async function pollAnalysisProgress(jobId) {
 
     const tick = async () => {
       try {
-        const status = await api(`/api/analyze/status/${jobId}`);
+        const status = await api(endpoints.status(jobId));
         updateProgressUI(status);
 
         if (status.status === "completed") {
           clearInterval(state.progressTimer);
           state.progressTimer = null;
 
-          const result = await api(`/api/analyze/result/${jobId}`);
+          const result = await api(endpoints.result(jobId));
           renderCompetencies(result.competencies || []);
-          renderTerna(result.terna || []);
+          renderTerna(result.recommended_terna || result.terna || []);
           renderRanking(result.ranking || []);
           renderReport(result.report || null);
+          renderAgentTrace(result.agent_trace || null);
+
           if (result.llm_status) {
             renderLLMStatus(result.llm_status);
           }
-          setStatus("Análisis completado.");
+
+          setStatus(`Análisis completado usando ${endpoints.label}.`);
           resolve(result);
           return;
         }
@@ -326,12 +352,21 @@ function updateProgressUI(status) {
 function clearPreviousResults() {
   $("competencies").className = "table-container empty";
   $("competencies").textContent = "Análisis en curso...";
+
   $("terna").className = "ranking-grid empty";
   $("terna").textContent = "Análisis en curso...";
+
   $("ranking").className = "ranking-list empty";
   $("ranking").textContent = "Análisis en curso...";
+
   $("report").className = "report-box empty";
   $("report").textContent = "El reporte se generará al finalizar el análisis...";
+
+  const agentTrace = $("agentTrace");
+  if (agentTrace) {
+    agentTrace.className = "agent-trace empty";
+    agentTrace.textContent = "La trazabilidad del agente aparecerá aquí si ejecutas el flujo LangChain.";
+  }
 }
 
 function renderReport(report) {
@@ -363,6 +398,99 @@ function renderReport(report) {
       <p><strong>Markdown:</strong> ${escapeHtml(report.markdown_filename || "")}</p>
       <p><strong>JSON:</strong> ${escapeHtml(report.json_filename || "")}</p>
     </div>
+  `;
+}
+
+function renderAgentTrace(agentTrace) {
+  const container = $("agentTrace");
+  if (!container) return;
+
+  if (!agentTrace) {
+    container.className = "agent-trace empty";
+    container.textContent = "Este análisis fue ejecutado con el flujo clásico. No hay trazabilidad de agente.";
+    return;
+  }
+
+  const tools = agentTrace.tools || [];
+  const plan = agentTrace.plan || [];
+  const memory = agentTrace.memory || {};
+  const shortMemory = memory.short_term_memory || {};
+  const decisions = shortMemory.decisions || [];
+  const toolCalls = shortMemory.tool_calls || [];
+
+  container.className = "agent-trace";
+  container.innerHTML = `
+    <div class="agent-summary">
+      <span class="agent-badge">LangChain</span>
+      <div>
+        <p><strong>Framework:</strong> ${escapeHtml(agentTrace.framework || "No informado")}</p>
+        <p><strong>Tipo de agente:</strong> ${escapeHtml(agentTrace.agent_type || "No informado")}</p>
+        <p><strong>Modo:</strong> ${escapeHtml(agentTrace.execution_mode || "No informado")}</p>
+      </div>
+    </div>
+
+    <details open>
+      <summary>Planificación generada</summary>
+      <pre>${escapeHtml(agentTrace.planning_output || "Sin planificación registrada.")}</pre>
+    </details>
+
+    <details>
+      <summary>Herramientas declaradas (${tools.length})</summary>
+      <ul>
+        ${tools.map(tool => `
+          <li>
+            <strong>${escapeHtml(tool.name)}</strong>:
+            ${escapeHtml(tool.description)}
+          </li>
+        `).join("")}
+      </ul>
+    </details>
+
+    <details>
+      <summary>Plan de ejecución (${plan.length} pasos)</summary>
+      <ol>
+        ${plan.map(step => `
+          <li>
+            <strong>${escapeHtml(step.name)}</strong>
+            <br />
+            <span>${escapeHtml(step.description)}</span>
+            <br />
+            <code>${escapeHtml(step.tool_name || "sin herramienta")}</code>
+          </li>
+        `).join("")}
+      </ol>
+    </details>
+
+    <details>
+      <summary>Decisiones adaptativas (${decisions.length})</summary>
+      <ul>
+        ${decisions.map(decision => `
+          <li>
+            <strong>${escapeHtml(decision.decision)}</strong>:
+            ${escapeHtml(decision.outcome)}
+          </li>
+        `).join("")}
+      </ul>
+    </details>
+
+    <details>
+      <summary>Herramientas ejecutadas (${toolCalls.length})</summary>
+      <ul>
+        ${toolCalls.map(call => `
+          <li>
+            <strong>${escapeHtml(call.tool_name)}</strong>
+            — ${call.success ? "OK" : "Error"}
+            <br />
+            <span>${escapeHtml(call.output_summary)}</span>
+          </li>
+        `).join("")}
+      </ul>
+    </details>
+
+    <details>
+      <summary>Memoria de largo plazo</summary>
+      <p><code>${escapeHtml(memory.long_term_memory_path || "No registrada")}</code></p>
+    </details>
   `;
 }
 
@@ -453,7 +581,14 @@ function renderRanking(ranking) {
 }
 
 function setStatus(message) {
-  $("status").textContent = message;
+  const status = $("status");
+
+  if (!status) {
+    console.warn("No se encontró el elemento #status:", message);
+    return;
+  }
+
+  status.textContent = message || "";
 }
 
 function escapeHtml(value) {
@@ -465,9 +600,32 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-$("extractBtn").addEventListener("click", () => extractAnnouncementText().catch(error => setStatus(error.message)));
-$("analyzeBtn").addEventListener("click", () => analyze().catch(error => setStatus(error.message)));
-$("modelSelect")?.addEventListener("change", updateModelDescription);
+const extractBtn = $("extractBtn");
+if (extractBtn) {
+  extractBtn.addEventListener("click", () => {
+    extractAnnouncementText().catch(error => setStatus(error.message));
+  });
+}
+
+const analyzeBtn = $("analyzeBtn");
+if (analyzeBtn) {
+  analyzeBtn.addEventListener("click", () => {
+    analyze().catch(error => setStatus(error.message));
+  });
+}
+
+const modelSelect = $("modelSelect");
+if (modelSelect) {
+  modelSelect.addEventListener("change", updateModelDescription);
+}
+
+const useAgentFlow = $("useAgentFlow");
+if (useAgentFlow) {
+  useAgentFlow.addEventListener("change", () => {
+    const endpoints = getAnalysisEndpoints();
+    setStatus(`Modo seleccionado: ${endpoints.label}.`);
+  });
+}
 
 Promise.all([
   loadLLMStatus().catch(error => {

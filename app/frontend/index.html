@@ -1,11 +1,13 @@
 <!doctype html>
 <html lang="es">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Talent RAG - Ranking por Competencias</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
+
 <body>
   <header class="hero">
     <div>
@@ -45,26 +47,36 @@
         <label for="ternaSize">Tamaño de terna</label>
         <input id="ternaSize" type="number" min="1" max="10" value="3" />
       </div>
+
+      <label class="agent-toggle">
+        <input id="useAgentFlow" type="checkbox" />
+        <span>
+          Usar agente LangChain
+          <small>Activa el flujo alternativo con herramientas, planificación y memoria.</small>
+        </span>
+      </label>
+
       <button id="analyzeBtn" class="primary">Analizar y generar ranking</button>
       <p id="status" class="status"></p>
 
       <div id="progressPanel" class="progress-panel hidden">
-        <div class="progress-header">
-          <strong>Progreso del análisis</strong>
-          <span id="progressPercent">0%</span>
+
+          <div class="progress-header">
+            <strong>Progreso del análisis</strong>
+            <span id="progressPercent">0%</span>
+          </div>
+          <div class="progress-bar">
+            <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
+          </div>
+          <p id="progressStep" class="progress-step">Esperando inicio...</p>
+          <div class="progress-metrics">
+            <span id="llmSuccessCount">LLM OK: 0</span>
+            <span id="llmFallbackCount">Fallback: 0</span>
+            <span id="llmErrorCount">Errores: 0</span>
+          </div>
+          <div class="progress-events-title" id="progressEventsHeader">Bitácora completa de ejecución (0 eventos)</div>
+          <div id="progressEvents" class="progress-events"></div>
         </div>
-        <div class="progress-bar">
-          <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
-        </div>
-        <p id="progressStep" class="progress-step">Esperando inicio...</p>
-        <div class="progress-metrics">
-          <span id="llmSuccessCount">LLM OK: 0</span>
-          <span id="llmFallbackCount">Fallback: 0</span>
-          <span id="llmErrorCount">Errores: 0</span>
-        </div>
-        <div class="progress-events-title" id="progressEventsHeader">Bitácora completa de ejecución (0 eventos)</div>
-        <div id="progressEvents" class="progress-events"></div>
-      </div>
     </section>
 
     <section class="card wide">
@@ -86,8 +98,16 @@
       <h2>6. Reporte local generado</h2>
       <div id="report" class="report-box empty">Sin reporte todavía.</div>
     </section>
+
+    <section class="card wide">
+      <h2>7. Trazabilidad del agente</h2>
+      <div id="agentTrace" class="agent-trace empty">
+        Ejecuta el análisis con la opción "Usar agente LangChain" para ver la trazabilidad.
+      </div>
+    </section>
   </main>
 
   <script src="/static/app.js"></script>
 </body>
+
 </html>

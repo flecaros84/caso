@@ -98,7 +98,8 @@ class ReportService:
         lines.append("# Reporte de análisis de candidatos")
         lines.append("")
         lines.append(f"**Fecha de generación:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        lines.append(f"**Anuncio analizado:** `{result.get('announcement_id', 'No informado')}`")
+        announcement_value = result.get("announcement_id") or result.get("announcement_name") or "No informado"
+        lines.append(f"**Anuncio analizado:** `{announcement_value}`")
         lines.append("")
 
         llm_status = result.get("llm_status") or {}
@@ -134,7 +135,9 @@ class ReportService:
         lines.append("| Lugar | Candidato | Puntaje | Recomendación | Fortalezas | Brechas |")
         lines.append("|---:|---|---:|---|---|---|")
 
-        for index, candidate in enumerate(result.get("terna", []), start=1):
+        recommended = result.get("terna") or result.get("recommended_terna") or []
+
+        for index, candidate in enumerate(recommended, start=1):
             lines.append(
                 "| "
                 f"{index} | "
@@ -171,6 +174,94 @@ class ReportService:
                     f"{self._md_cell(evidence_text)} |"
                 )
             lines.append("")
+
+        agent_trace = result.get("agent_trace") or {}
+        if agent_trace:
+            lines.append("## Orquestación del agente LangChain")
+            lines.append("")
+            lines.append(f"- **Framework:** {self._md_cell(agent_trace.get('framework'))}")
+            lines.append(f"- **Tipo de agente:** `{self._md_cell(agent_trace.get('agent_type'))}`")
+            lines.append(f"- **Modo de ejecución:** `{self._md_cell(agent_trace.get('execution_mode'))}`")
+            lines.append("")
+
+            tools = agent_trace.get("tools") or []
+            if tools:
+                lines.append("### Herramientas declaradas")
+                lines.append("")
+                lines.append("| Herramienta | Descripción |")
+                lines.append("|---|---|")
+                for tool in tools:
+                    lines.append(
+                        "| "
+                        f"`{self._md_cell(tool.get('name'))}` | "
+                        f"{self._md_cell(tool.get('description'))} |"
+                    )
+                lines.append("")
+
+            plan = agent_trace.get("plan") or []
+            if plan:
+                lines.append("### Plan de ejecución")
+                lines.append("")
+                lines.append("| Orden | Paso | Tipo | Herramienta | Descripción |")
+                lines.append("|---:|---|---|---|---|")
+                for step in plan:
+                    lines.append(
+                        "| "
+                        f"{step.get('order', '')} | "
+                        f"{self._md_cell(step.get('name'))} | "
+                        f"{self._md_cell(step.get('step_type'))} | "
+                        f"`{self._md_cell(step.get('tool_name'))}` | "
+                        f"{self._md_cell(step.get('description'))} |"
+                    )
+                lines.append("")
+
+            planning_output = agent_trace.get("planning_output")
+            if planning_output:
+                lines.append("### Planificación generada por LangChain")
+                lines.append("")
+                lines.append("> " + self._md_cell(planning_output[:1500]))
+                lines.append("")
+
+            memory = agent_trace.get("memory") or {}
+            short_memory = memory.get("short_term_memory") or {}
+
+            decisions = short_memory.get("decisions") or []
+            if decisions:
+                lines.append("### Decisiones adaptativas registradas")
+                lines.append("")
+                lines.append("| Decisión | Razón | Resultado |")
+                lines.append("|---|---|---|")
+                for decision in decisions:
+                    lines.append(
+                        "| "
+                        f"{self._md_cell(decision.get('decision'))} | "
+                        f"{self._md_cell(decision.get('reason'))} | "
+                        f"{self._md_cell(decision.get('outcome'))} |"
+                    )
+                lines.append("")
+
+            tool_calls = short_memory.get("tool_calls") or []
+            if tool_calls:
+                lines.append("### Trazabilidad de herramientas ejecutadas")
+                lines.append("")
+                lines.append("| Herramienta | Entrada | Salida | Éxito |")
+                lines.append("|---|---|---|---:|")
+                for call in tool_calls:
+                    lines.append(
+                        "| "
+                        f"`{self._md_cell(call.get('tool_name'))}` | "
+                        f"{self._md_cell(call.get('input_summary'))} | "
+                        f"{self._md_cell(call.get('output_summary'))} | "
+                        f"{call.get('success', False)} |"
+                    )
+                lines.append("")
+
+            long_term_path = memory.get("long_term_memory_path")
+            if long_term_path:
+                lines.append("### Memoria de largo plazo")
+                lines.append("")
+                lines.append(f"- **Archivo de memoria:** `{self._md_cell(long_term_path)}`")
+                lines.append("")
 
         ethical_notes = result.get("ethical_notes") or []
         if ethical_notes:

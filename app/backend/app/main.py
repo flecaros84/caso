@@ -21,6 +21,7 @@ from app.services.ranking_service import RankingService
 from app.services.llm_client import GitHubModelsClient
 from app.services.report_service import ReportService
 from app.services.model_catalog_service import ModelCatalogService
+from app.agents.langchain_recruitment_agent import LangChainRecruitmentAgent
 
 # main.py lives in: caso/app/backend/app/main.py
 APP_DIR = Path(__file__).resolve().parents[2]      # caso/app
@@ -56,6 +57,14 @@ evaluator_service = EvaluatorService()
 ranking_service = RankingService()
 report_service = ReportService(APP_DIR / "backend" / "outputs" / "reports")
 model_catalog_service = ModelCatalogService()
+
+langchain_agent = LangChainRecruitmentAgent(
+    file_service=file_service,
+    text_extractor=text_extractor,
+    ranking_service=ranking_service,
+    report_service=report_service,
+    model_catalog_service=model_catalog_service,
+)
 
 JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
@@ -259,16 +268,14 @@ def run_analysis(request: AnalysisRequest, job_id: str | None = None) -> Analysi
     _advance_job(job_id, "Ranking y terna generados.", kind="success")
 
     response = AnalysisResponse(
-        announcement_id=request.announcement_id,
+        announcement_name=request.announcement_id,
         competencies=competencies,
+        candidates=candidate_results,
         ranking=ranking,
-        terna=terna,
-        ethical_notes=[
-            "El ranking es una preselección documental y no reemplaza la decisión humana.",
-            "El sistema debe ignorar edad, género, fotografía, nacionalidad, estado civil y datos familiares.",
-            "Las recomendaciones se basan en evidencia textual presente en los CV y en el anuncio laboral.",
-        ],
-        llm_status=get_llm_status(selected_model),
+        recommended_terna=terna,
+        report=None,
+        progress_log=[],
+        agent_trace=None,
     )
 
     report_info = report_service.save_analysis_report(
@@ -287,6 +294,37 @@ def run_analysis(request: AnalysisRequest, job_id: str | None = None) -> Analysi
 
     return response
 
+def run_agent_analysis(request: AnalysisRequest, job_id: str | None = None) -> AnalysisResponse:
+    if job_id:
+        _add_event(job_id, "Iniciando agente LangChain de preselección documental...", "info")
+        _update_job(
+            job_id,
+            status="running",
+            total_steps=6 + max(len(request.cv_ids), 1),
+            current_step="Agente LangChain iniciado...",
+        )
+
+    def agent_progress(payload: dict[str, Any]) -> None:
+        message = str(payload.get("message", "Evento del agente LangChain."))
+
+        if job_id:
+            _advance_job(
+                job_id,
+                message,
+                kind="info",
+                steps=1,
+            )
+
+    result = langchain_agent.analyze(
+        request,
+        job_id=job_id,
+        progress_callback=agent_progress,
+    )
+
+    if job_id:
+        _add_event(job_id, "Agente LangChain finalizó el análisis.", "success")
+
+    return result
 
 def _background_analysis(job_id: str, request: AnalysisRequest) -> None:
     try:
@@ -304,6 +342,21 @@ def _background_analysis(job_id: str, request: AnalysisRequest) -> None:
         _update_job(job_id, status="failed", error=str(exc), current_step="El análisis falló.")
         _add_event(job_id, f"Error: {exc}", "error")
 
+def _background_agent_analysis(job_id: str, request: AnalysisRequest) -> None:
+    try:
+        _update_job(job_id, status="running", current_step="Iniciando agente LangChain...")
+        result = run_agent_analysis(request, job_id=job_id)
+        _update_job(
+            job_id,
+            status="completed",
+            completed_steps=JOBS[job_id]["total_steps"],
+            current_step="Análisis con agente completado.",
+            result=result.model_dump(mode="json"),
+        )
+        _add_event(job_id, "Análisis con agente LangChain completado correctamente.", "success")
+    except Exception as exc:
+        _update_job(job_id, status="failed", error=str(exc), current_step="El análisis con agente falló.")
+        _add_event(job_id, f"Error en agente LangChain: {exc}", "error")
 
 @app.get("/")
 def index() -> FileResponse:
@@ -405,4 +458,40 @@ def analyze_result(job_id: str) -> dict:
             raise HTTPException(status_code=404, detail="Trabajo de análisis no encontrado.")
         if job.get("status") != "completed":
             raise HTTPException(status_code=202, detail="El análisis todavía no ha terminado.")
+        return job["result"]
+
+@app.post("/api/agent/analyze", response_model=AnalysisResponse)
+def agent_analyze(request: AnalysisRequest) -> AnalysisResponse:
+    try:
+        return run_agent_analysis(request)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/agent/analyze/start")
+def agent_analyze_start(request: AnalysisRequest) -> dict:
+    job_id = _new_job()
+    thread = threading.Thread(target=_background_agent_analysis, args=(job_id, request), daemon=True)
+    thread.start()
+    return {"job_id": job_id}
+
+
+@app.get("/api/agent/analyze/status/{job_id}")
+def agent_analyze_status(job_id: str) -> dict:
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Trabajo de análisis con agente no encontrado.")
+        safe_job = {k: v for k, v in job.items() if k != "result"}
+    return safe_job
+
+
+@app.get("/api/agent/analyze/result/{job_id}")
+def agent_analyze_result(job_id: str) -> dict:
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Trabajo de análisis con agente no encontrado.")
+        if job.get("status") != "completed":
+            raise HTTPException(status_code=202, detail="El análisis con agente todavía no ha terminado.")
         return job["result"]
