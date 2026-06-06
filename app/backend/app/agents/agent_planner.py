@@ -6,16 +6,27 @@ from dataclasses import dataclass, asdict
 from typing import Any
 
 
+# Representa un paso planificado dentro del flujo del agente.
+# Se usa como estructura simple para ordenar tareas, herramientas y tipos de acción.
 @dataclass
 class AgentPlanStep:
     """
     Represents a planned step in the recruitment agent workflow.
     """
 
+    # Orden numérico del paso dentro del flujo.
     order: int
+
+    # Nombre interno del paso.
     name: str
+
+    # Descripción breve de lo que realiza el paso.
     description: str
+
+    # Nombre de la herramienta asociada al paso, si corresponde.
     tool_name: str | None = None
+
+    # Tipo de paso: consulta, razonamiento, escritura, memoria u otro.
     step_type: str = "workflow"
 
 
@@ -35,6 +46,8 @@ class RecruitmentAgentPlanner:
         manual_announcement_text: str | None,
         cv_names: list[str],
     ) -> list[dict[str, Any]]:
+        # Define el plan base del agente.
+        # Este plan mantiene un flujo fijo y auditable para el análisis de candidatos.
         plan = [
             AgentPlanStep(
                 order=1,
@@ -80,6 +93,8 @@ class RecruitmentAgentPlanner:
             ),
         ]
 
+        # Convierte cada paso dataclass en diccionario.
+        # Esto facilita guardar el plan en trazas, reportes o respuestas JSON.
         return [asdict(step) for step in plan]
 
     def build_adaptive_decisions(
@@ -88,8 +103,10 @@ class RecruitmentAgentPlanner:
         manual_announcement_text: str | None,
         cv_names: list[str],
     ) -> list[dict[str, Any]]:
+        # Lista donde se guardan decisiones tomadas según las condiciones de la solicitud.
         decisions: list[dict[str, Any]] = []
 
+        # Decide si se usará texto manual del anuncio o si se extraerá desde archivo.
         if manual_announcement_text and manual_announcement_text.strip():
             decisions.append(
                 {
@@ -107,6 +124,8 @@ class RecruitmentAgentPlanner:
                 }
             )
 
+        # Decide cómo actuar según la cantidad de CV seleccionados.
+        # Si no hay CV, el agente no puede continuar con la evaluación.
         if not cv_names:
             decisions.append(
                 {
@@ -132,6 +151,7 @@ class RecruitmentAgentPlanner:
                 }
             )
 
+        # Si existe un nombre de anuncio, se registra como fuente documental del análisis.
         if announcement_name:
             decisions.append(
                 {
@@ -141,4 +161,5 @@ class RecruitmentAgentPlanner:
                 }
             )
 
+        # Devuelve todas las decisiones adaptativas tomadas para esta solicitud.
         return decisions
