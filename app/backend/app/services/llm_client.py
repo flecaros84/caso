@@ -29,6 +29,7 @@ class GitHubModelsClient:
         self.request_delay_seconds = float(settings.llm_request_delay_seconds)
         self.max_retries = int(settings.llm_max_retries)
         self.retry_base_seconds = int(settings.llm_retry_base_seconds)
+        self.fail_fast_on_rate_limit = bool(settings.llm_fail_fast_on_rate_limit)
 
     def complete_json(
         self,
@@ -72,12 +73,33 @@ class GitHubModelsClient:
                     response = requests.post(self.endpoint, headers=headers, json=payload, timeout=120)
 
                 if response.status_code == 429:
+                    if self.fail_fast_on_rate_limit:
+                        print(
+                            "[LLM RATE LIMIT] 429 Too Many Requests. "
+                            "Fallback local activado sin nuevos reintentos."
+                        )
+                        return None
+
+                    if attempt >= self.max_retries:
+                        print(
+                            "[LLM RATE LIMIT] 429 Too Many Requests. "
+                            "Máximo de reintentos alcanzado. Usando fallback local."
+                        )
+                        return None
+
                     wait_seconds = self._get_retry_wait_seconds(response, attempt)
                     print(f"[LLM RATE LIMIT] 429 Too Many Requests. Waiting {wait_seconds} seconds...")
                     time.sleep(wait_seconds)
                     continue
 
                 if response.status_code >= 500:
+                    if attempt >= self.max_retries:
+                        print(
+                            f"[LLM SERVER ERROR] {response.status_code}. "
+                            "Máximo de reintentos alcanzado. Usando fallback local."
+                        )
+                        return None
+
                     wait_seconds = self._get_server_error_wait_seconds(attempt)
                     print(f"[LLM SERVER ERROR] {response.status_code}. Waiting {wait_seconds} seconds...")
                     time.sleep(wait_seconds)
@@ -97,6 +119,10 @@ class GitHubModelsClient:
                 return None
 
             except requests.exceptions.Timeout:
+                if attempt >= self.max_retries:
+                    print("[LLM TIMEOUT] Máximo de reintentos alcanzado. Usando fallback local.")
+                    return None
+
                 wait_seconds = self._get_server_error_wait_seconds(attempt)
                 print(f"[LLM TIMEOUT] Waiting {wait_seconds} seconds before retry...")
                 time.sleep(wait_seconds)
