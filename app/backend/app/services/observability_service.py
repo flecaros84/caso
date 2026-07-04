@@ -1,3 +1,12 @@
+# observability_service.py
+
+# Importaciones estándar utilizadas para construir la observabilidad:
+# - json: guardar snapshots en formato JSON.
+# - statistics: calcular promedios y desviación estándar.
+# - time y datetime: medir duración y generar fechas legibles.
+# - Path: manejar rutas de carpetas y archivos.
+# - Any: permitir tipos flexibles en resultados y diccionarios.
+
 from __future__ import annotations
 
 import json
