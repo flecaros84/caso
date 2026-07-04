@@ -1686,3 +1686,342 @@ El proyecto demuestra cómo aplicar IA generativa, RAG y agentes inteligentes a 
 La solución cumple con el enfoque de la pauta porque incluye análisis del caso, uso de LLM, uso de RAG, selector de modelo, arquitectura modular, prompts, trazabilidad, evaluación por evidencia, fallback local, agente LangChain, memoria del agente, herramientas formales y consideraciones éticas.
 
 El resultado final no reemplaza al equipo de talento, sino que entrega una ayuda inicial para priorizar candidatos y construir una terna recomendada basada en competencias documentadas.
+
+---
+
+## 22. Implementación de observabilidad para EP3
+
+Para la Evaluación Parcial N°3 se incorporó una capa de observabilidad sobre la aplicación RAG de evaluación de candidatos. El objetivo fue medir el comportamiento real del agente durante la ejecución, registrar eventos relevantes, detectar anomalías y proponer mejoras técnicas basadas en evidencia.
+
+La observabilidad implementada no reemplaza el flujo principal de análisis. Funciona como una capa adicional que registra lo que ocurre durante la ejecución del agente y genera evidencia técnica para revisar rendimiento, trazabilidad, uso de LLM, fallback local, errores y calidad de evidencia documental.
+
+### 22.1 Métricas implementadas
+
+La aplicación registra automáticamente las siguientes métricas:
+
+| Categoría | Métricas registradas |
+|---|---|
+| Rendimiento | Latencia total, latencia promedio por candidato, latencia promedio por evaluación. |
+| Uso de LLM | Llamadas exitosas al LLM, tasa de éxito LLM, modelo utilizado. |
+| Fallback local | Cantidad de usos de fallback, tasa de fallback local. |
+| Errores | Errores asociados al LLM o al proveedor externo. |
+| Dataset | Anuncio analizado, cantidad de candidatos, cantidad de competencias, cantidad de evaluaciones. |
+| Calidad de evidencia | Evidencia promedio, evidencia débil, evidencia clara/fuerte. |
+| Ranking | Puntaje promedio, puntaje máximo, puntaje mínimo, margen entre candidatos. |
+| Trazabilidad | Trace ID, eventos de ejecución, archivo JSON de observabilidad. |
+| Uso responsable | Revisión humana requerida, variables sensibles excluidas, alcance de decisión. |
+
+Estas métricas permiten observar tanto el comportamiento técnico del sistema como la calidad del resultado generado.
+
+### 22.2 Dashboard de observabilidad
+
+Se agregó un dashboard visual en el frontend con una sección llamada:
+
+```text
+Dashboard de observabilidad
+```
+
+Este panel muestra, al finalizar cada análisis:
+
+- latencia total;
+- latencia por candidato;
+- cantidad de evaluaciones;
+- tasa de éxito del LLM;
+- tasa de fallback local;
+- tasa de errores;
+- evidencia promedio;
+- puntaje promedio;
+- anomalías detectadas;
+- recomendaciones automáticas;
+- controles de uso responsable;
+- Trace ID;
+- archivo JSON de observabilidad generado.
+
+Esto permite revisar rápidamente si una ejecución fue estable, lenta, dependiente de fallback o con evidencia documental insuficiente.
+
+### 22.3 Registro de eventos y trazabilidad
+
+Durante la ejecución se registran eventos de avance, por ejemplo:
+
+```text
+Modelo seleccionado.
+Preparando anuncio laboral.
+Texto del anuncio disponible.
+Deduciendo competencias desde el anuncio.
+Competencias deducidas.
+Leyendo CV.
+Construyendo índice RAG.
+Evaluando competencia.
+Usando LLM o fallback local.
+Ranking y terna generados.
+```
+
+Estos eventos permiten reconstruir el flujo completo y detectar en qué punto ocurre una demora, error o cambio de comportamiento.
+
+Cada ejecución queda asociada a un identificador único:
+
+```text
+trace_id
+```
+
+Este identificador permite relacionar la ejecución visible en el frontend con el archivo JSON de observabilidad y con el reporte generado.
+
+### 22.4 Detección automática de anomalías
+
+El servicio de observabilidad detecta anomalías mediante reglas simples y auditables.
+
+| Anomalía | Condición observada | Interpretación |
+|---|---|---|
+| Alto uso de fallback | Tasa de fallback igual o superior al umbral definido. | Puede indicar límite del proveedor LLM, errores temporales o mala configuración. |
+| Errores del LLM | Tasa de error mayor que cero. | Indica fallas en llamadas al modelo o al proveedor externo. |
+| Baja evidencia documental | Alta proporción de evidencia débil o no evidenciada. | Puede indicar CV incompletos o consultas RAG poco precisas. |
+| Ranking estrecho | Diferencia baja entre los primeros candidatos. | Requiere revisión humana más detallada. |
+| Latencia alta | Tiempo promedio por evaluación superior al umbral definido. | Puede afectar escalabilidad y experiencia de uso. |
+
+Estas anomalías aparecen tanto en el dashboard como en el JSON de observabilidad y en el reporte Markdown.
+
+### 22.5 Recomendaciones automáticas
+
+A partir de las anomalías detectadas, el sistema genera recomendaciones técnicas. Algunos ejemplos son:
+
+```text
+Revisar la configuración del modelo LLM, límites de solicitudes y tiempos de espera para reducir el uso de fallback local.
+```
+
+```text
+Optimizar el número de llamadas al LLM o reducir el tamaño de evidencia enviada por competencia para mejorar latencia.
+```
+
+```text
+Revisar la calidad de los CV o ajustar las consultas RAG, porque varias competencias tienen evidencia documental débil.
+```
+
+```text
+Mantener el sistema como apoyo a la preselección documental; la decisión final debe permanecer en una persona responsable del proceso.
+```
+
+Estas recomendaciones permiten conectar métricas observadas con acciones de mejora concretas.
+
+### 22.6 Mejora implementada a partir de observabilidad: fallback rápido
+
+Durante las pruebas se observó que algunos modelos podían responder con errores de límite de solicitudes:
+
+```text
+429 Too Many Requests
+```
+
+Antes de la mejora, el sistema podía realizar varios reintentos y esperar tiempos prolongados antes de activar el fallback local. Esto generaba una latencia muy alta, especialmente cuando el proveedor externo respondía con rate limit de forma repetida.
+
+Como mejora técnica, se agregó una configuración de fallback rápido:
+
+```env
+LLM_FAIL_FAST_ON_RATE_LIMIT=true
+```
+
+Con esta opción activa, si el LLM responde con error `429`, el sistema no espera todos los reintentos. En su lugar, activa fallback local inmediatamente.
+
+El comportamiento esperado queda así:
+
+| Situación | Comportamiento |
+|---|---|
+| LLM responde correctamente | Se usa la respuesta del modelo. |
+| LLM responde 429 | Se activa fallback local sin esperar múltiples reintentos. |
+| LLM responde error temporal | Se aplican reintentos controlados según configuración. |
+| LLM no está disponible | Se usa fallback local. |
+
+Esta mejora reduce latencia, mejora continuidad operativa y hace que el sistema sea más defendible desde el punto de vista de escalabilidad y resiliencia.
+
+### 22.7 Seguridad, privacidad y uso responsable
+
+La observabilidad también incluye una sección de uso responsable. Esta sección explicita que la aplicación:
+
+- funciona como apoyo documental;
+- no toma decisiones automáticas de contratación;
+- requiere revisión humana final;
+- debe basarse solo en evidencia relacionada con el cargo;
+- excluye variables sensibles.
+
+Variables sensibles excluidas:
+
+- edad;
+- género;
+- nacionalidad;
+- estado civil;
+- fotografía;
+- dirección exacta;
+- datos familiares;
+- religión;
+- situación médica;
+- opiniones políticas.
+
+Bases válidas para evaluar:
+
+- formación académica;
+- experiencia laboral;
+- conocimientos técnicos;
+- certificaciones;
+- funciones realizadas;
+- competencias relacionadas con el cargo.
+
+Esto permite evidenciar que la aplicación considera criterios de seguridad, privacidad y responsabilidad en el uso de IA.
+
+---
+
+## 23. Archivos nuevos y modificados para EP3
+
+### 23.1 Archivos nuevos
+
+| Archivo | Tipo | Descripción |
+|---|---|---|
+| `app/backend/app/services/observability_service.py` | Servicio backend | Construye métricas de observabilidad, detecta anomalías, genera recomendaciones y guarda snapshots JSON. |
+| `app/backend/outputs/observability/` | Carpeta de salida | Almacena archivos JSON de observabilidad por ejecución. |
+
+### 23.2 Archivos modificados
+
+| Archivo | Cambio realizado |
+|---|---|
+| `app/backend/app/main.py` | Se integró el servicio de observabilidad al flujo de análisis. Se genera snapshot al finalizar cada ejecución y se adjunta al resultado. |
+| `app/backend/app/config.py` | Se agregó configuración para fallback rápido ante rate limit del LLM. |
+| `app/backend/app/services/llm_client.py` | Se incorporó lógica para activar fallback local inmediato ante error `429 Too Many Requests`, evitando esperas largas innecesarias. |
+| `app/backend/app/services/report_service.py` | Se agregó una sección de observabilidad al reporte Markdown generado automáticamente. |
+| `app/backend/app/models/schemas.py` | Se agregó el campo `observability` a la respuesta del análisis. |
+| `app/frontend/index.html` | Se agregó la sección visual “Dashboard de observabilidad”. |
+| `app/frontend/app.js` | Se agregó renderizado de métricas, anomalías, recomendaciones y uso responsable. También se mejoró el manejo de valores cero en HTML. |
+| `app/frontend/styles.css` | Se agregaron estilos para tarjetas de métricas, paneles de observabilidad y layout del dashboard. |
+| `.env` | Se puede configurar `LLM_FAIL_FAST_ON_RATE_LIMIT`, `LLM_MAX_RETRIES`, `LLM_RETRY_BASE_SECONDS` y `LLM_REQUEST_DELAY_SECONDS`. |
+
+### 23.3 Variables de entorno relevantes
+
+```env
+USE_LLM=true
+GITHUB_TOKEN=tu_token
+GITHUB_MODEL=openai/gpt-4o-mini
+GITHUB_MODELS_ENDPOINT=https://models.github.ai/inference/chat/completions
+
+LLM_REQUEST_DELAY_SECONDS=8
+LLM_MAX_RETRIES=1
+LLM_RETRY_BASE_SECONDS=5
+LLM_FAIL_FAST_ON_RATE_LIMIT=true
+```
+
+Estas variables permiten controlar el uso del LLM, el modelo seleccionado y el comportamiento de reintentos/fallback.
+
+---
+
+## 24. Cumplimiento de la pauta EP3
+
+La implementación de observabilidad permite cubrir los principales criterios de la pauta de la Evaluación Parcial N°3.
+
+| Indicador | Cumplimiento en el proyecto |
+|---|---|
+| IE1: Métricas de precisión, consistencia y errores | Se registran tasas de éxito LLM, fallback local, errores, evidencia promedio, evidencia débil y evidencia fuerte. |
+| IE2: Medición de latencia y recursos | Se mide latencia total, latencia por candidato y latencia por evaluación. |
+| IE3: Análisis de logs y trazabilidad | Se registra una bitácora completa de eventos por ejecución, asociada a un `trace_id`. |
+| IE4: Identificación de patrones y anomalías | Se detectan anomalías como alto fallback, errores LLM, baja evidencia, ranking estrecho y latencia alta. |
+| IE5: Dashboard de observabilidad | Se implementó un dashboard visual en el frontend con métricas, anomalías, recomendaciones y uso responsable. |
+| IE6: Seguridad, privacidad y uso responsable | Se explicita revisión humana obligatoria, alcance documental y exclusión de variables sensibles. |
+| IE7: Recomendaciones de sostenibilidad, escalabilidad y mejora | Se generan recomendaciones automáticas. Además, se implementó fallback rápido ante `429` para reducir latencia y mejorar resiliencia. |
+| IE8: Informe técnico con evidencia | Los reportes Markdown y JSON incluyen resultados del análisis y sección de observabilidad. |
+| IE9: Claridad técnica y documentación | El README documenta arquitectura, flujo, servicios, prompts, agente, observabilidad, archivos modificados y cumplimiento de pauta. |
+
+### 24.1 Evidencia de cumplimiento
+
+La aplicación genera evidencia en tres niveles:
+
+| Nivel | Evidencia |
+|---|---|
+| Frontend | Dashboard de observabilidad visible al finalizar el análisis. |
+| Backend | JSON de observabilidad en `app/backend/outputs/observability/`. |
+| Reporte | Markdown y JSON en `app/backend/outputs/reports/`. |
+
+Ejemplo de archivo de observabilidad:
+
+```text
+app/backend/outputs/observability/observability_YYYYMMDD_HHMMSS_traceid.json
+```
+
+Ejemplo de reporte generado:
+
+```text
+app/backend/outputs/reports/reporte_anuncio_YYYYMMDD_HHMMSS_traceid.md
+```
+
+### 24.2 Evidencia de mejora basada en logs
+
+Durante las pruebas se detectó que un modelo podía generar errores de rate limit y esperas prolongadas antes de activar fallback local. La observabilidad permitió identificar:
+
+- alta latencia;
+- alto uso de fallback;
+- esperas por reintentos;
+- dependencia del proveedor externo.
+
+A partir de esto se implementó fallback rápido ante `429 Too Many Requests`.
+
+Esta mejora es defendible porque nace directamente del análisis de logs y métricas observadas.
+
+---
+
+## 25. Estado final de la entrega EP3
+
+La entrega queda en estado funcional y defendible para observabilidad.
+
+### Implementado
+
+- Dashboard de observabilidad en frontend.
+- Servicio backend de observabilidad.
+- Métricas de latencia.
+- Métricas de uso LLM.
+- Métricas de fallback local.
+- Métricas de errores.
+- Métricas de calidad de evidencia.
+- Detección de anomalías.
+- Recomendaciones automáticas.
+- JSON persistente por ejecución.
+- Observabilidad incluida en reportes Markdown.
+- Uso responsable visible en dashboard y reporte.
+- Mejora de fallback rápido ante rate limit.
+- Comentarios en servicios backend y frontend relevantes.
+
+### Parcial o mejorable
+
+- No se implementó integración con Grafana, Kibana o herramientas externas.
+- No se midió consumo real de CPU, memoria o costo monetario.
+- Las anomalías se detectan mediante reglas simples, no mediante modelos estadísticos avanzados.
+- El dashboard es propio de la aplicación, no una solución externa especializada.
+- La evaluación de calidad usa evidencia documental como aproximación, no validación humana etiquetada.
+
+### Justificación del alcance
+
+Para el contexto del prototipo académico, se priorizó una observabilidad integrada, simple y defendible, directamente conectada con el flujo real del agente. La solución permite demostrar métricas, trazabilidad, análisis de errores, dashboard, recomendaciones y uso responsable sin agregar infraestructura externa innecesaria.
+
+---
+
+## 26. Conclusión actualizada para EP3
+
+La aplicación evolucionó desde un prototipo RAG para evaluación documental hacia una solución con observabilidad integrada. Además de deducir competencias, evaluar CV y generar ranking, ahora el sistema registra métricas de ejecución, detecta anomalías, genera recomendaciones y deja evidencia técnica en dashboard, JSON y reportes Markdown.
+
+La mejora más relevante fue identificar, mediante logs, que ciertos modelos podían generar latencias elevadas por errores `429 Too Many Requests`. A partir de ese hallazgo se implementó fallback rápido, reduciendo la dependencia de reintentos prolongados y mejorando la continuidad del análisis.
+
+Con esta actualización, el proyecto no solo entrega resultados de IA, sino también evidencia sobre cómo se comporta el agente, qué tan estable fue la ejecución, cuándo se usó fallback, qué anomalías se detectaron y qué acciones de mejora se recomiendan. Esto permite defender la solución desde una perspectiva técnica, ética y operacional.
+
+---
+
+## Cambios puntuales recomendados en secciones anteriores
+
+En la sección 13, reemplazar la fila:
+
+```markdown
+| Muchas llamadas al LLM | Se aplican pausas y reintentos. |
+```
+
+por:
+
+```markdown
+| Muchas llamadas al LLM | Se aplican pausas, reintentos controlados o fallback rápido ante rate limit `429`. |
+```
+
+En el ejemplo `.env` de la sección 15, agregar:
+
+```env
+LLM_FAIL_FAST_ON_RATE_LIMIT=true
+```
