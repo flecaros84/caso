@@ -338,6 +338,24 @@ def run_analysis(request: AnalysisRequest, job_id: str | None = None) -> Analysi
     return response
 
 def run_agent_analysis(request: AnalysisRequest, job_id: str | None = None) -> AnalysisResponse:
+    """
+    Ejecuta el flujo alternativo con agente LangChain.
+
+    Además de devolver la trazabilidad propia del agente, esta versión integra
+    observabilidad igual que el flujo clásico:
+    - latencia;
+    - eventos;
+    - uso de LLM;
+    - fallback;
+    - errores;
+    - calidad de evidencia;
+    - anomalías;
+    - recomendaciones;
+    - uso responsable.
+    """
+
+    analysis_started_at = time.time()
+
     if job_id:
         _add_event(job_id, "Iniciando agente LangChain de preselección documental...", "info")
         _update_job(
@@ -348,15 +366,56 @@ def run_agent_analysis(request: AnalysisRequest, job_id: str | None = None) -> A
         )
 
     def agent_progress(payload: dict[str, Any]) -> None:
-        message = str(payload.get("message", "Evento del agente LangChain."))
+        """
+        Recibe eventos internos del agente y de sus herramientas.
 
-        if job_id:
+        Cuando el payload viene desde EvaluatorService, trae información útil:
+        - candidate_name;
+        - competency_name;
+        - llm_success;
+        - used_fallback;
+        - evidence_level.
+
+        Antes estos eventos aparecían como "Evento del agente LangChain".
+        Ahora se convierten en eventos observables y actualizan contadores.
+        """
+
+        if not job_id:
+            return
+
+        competency_name = payload.get("competency_name")
+
+        if competency_name:
+            llm_success = bool(payload.get("llm_success"))
+            used_fallback = bool(payload.get("used_fallback"))
+            candidate_name = str(payload.get("candidate_name", "Candidato"))
+            evidence_level = str(payload.get("evidence_level", ""))
+
+            with JOBS_LOCK:
+                job = JOBS.get(job_id)
+
+                if job:
+                    if llm_success:
+                        job["llm_success"] = int(job.get("llm_success") or 0) + 1
+                    elif used_fallback:
+                        job["llm_fallback"] = int(job.get("llm_fallback") or 0) + 1
+                    else:
+                        job["llm_errors"] = int(job.get("llm_errors") or 0) + 1
+
+            mode = "LLM OK" if llm_success else "fallback local"
+            kind = "success" if llm_success else "warning"
+
             _advance_job(
                 job_id,
-                message,
-                kind="info",
+                f"{candidate_name}: {competency_name} evaluada ({mode}, nivel: {evidence_level}).",
+                kind=kind,
                 steps=1,
             )
+
+            return
+
+        message = str(payload.get("message", "Evento del agente LangChain."))
+        _advance_job(job_id, message, kind="info", steps=1)
 
     result = langchain_agent.analyze(
         request,
@@ -366,6 +425,40 @@ def run_agent_analysis(request: AnalysisRequest, job_id: str | None = None) -> A
 
     if job_id:
         _add_event(job_id, "Agente LangChain finalizó el análisis.", "success")
+
+    analysis_finished_at = time.time()
+
+    with JOBS_LOCK:
+        job_snapshot = dict(JOBS.get(job_id) or {}) if job_id else {}
+
+    if job_snapshot:
+        job_snapshot["status"] = "completed"
+        job_snapshot["updated_at"] = analysis_finished_at
+
+    observability_snapshot = observability_service.build_snapshot(
+        result=result,
+        job_state=job_snapshot,
+        started_at=analysis_started_at,
+        finished_at=analysis_finished_at,
+    )
+
+    observability_file = observability_service.save_snapshot(observability_snapshot)
+
+    if observability_file:
+        observability_snapshot["file"] = observability_file
+
+    result.observability = observability_snapshot
+
+    # El agente ya genera un reporte dentro de su flujo, pero ese primer reporte
+    # se crea antes de adjuntar observabilidad. Por eso se genera un reporte final
+    # adicional con observabilidad incluida, y ese es el que queda enlazado en frontend.
+    report_info = report_service.save_analysis_report(
+        result=result,
+        job_id=job_id,
+        announcement_id=request.announcement_id,
+    )
+
+    result.report = report_info
 
     return result
 
