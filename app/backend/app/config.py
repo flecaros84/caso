@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     llm_max_retries: int = Field(default=4, alias="LLM_MAX_RETRIES")
     llm_retry_base_seconds: int = Field(default=10, alias="LLM_RETRY_BASE_SECONDS")
 
+    llm_fail_fast_on_rate_limit: bool = Field(
+        default=True,
+        alias="LLM_FAIL_FAST_ON_RATE_LIMIT",
+    )
+
     data_root: str = Field(default="../../resources", alias="DATA_ROOT")
     announcements_dir: str = Field(default="../../resources/img/announcements", alias="ANNOUNCEMENTS_DIR")
     cv_dir: str = Field(default="../../resources/pdf/cv", alias="CV_DIR")

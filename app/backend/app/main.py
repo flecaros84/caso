@@ -20,6 +20,7 @@ from app.services.evaluator_service import EvaluatorService
 from app.services.ranking_service import RankingService
 from app.services.llm_client import GitHubModelsClient
 from app.services.report_service import ReportService
+from app.services.observability_service import ObservabilityService
 from app.services.model_catalog_service import ModelCatalogService
 from app.agents.langchain_recruitment_agent import LangChainRecruitmentAgent
 
@@ -56,6 +57,9 @@ competency_service = CompetencyService()
 evaluator_service = EvaluatorService()
 ranking_service = RankingService()
 report_service = ReportService(APP_DIR / "backend" / "outputs" / "reports")
+observability_service = ObservabilityService(
+    APP_DIR / "backend" / "outputs" / "observability"
+)
 model_catalog_service = ModelCatalogService()
 
 langchain_agent = LangChainRecruitmentAgent(
@@ -157,6 +161,9 @@ def get_llm_status(model_override: str | None = None) -> dict:
 
 
 def run_analysis(request: AnalysisRequest, job_id: str | None = None) -> AnalysisResponse:
+
+    analysis_started_at = time.time()
+
     announcement_path = file_service.resolve_announcement(request.announcement_id)
 
     selected_model = (request.selected_model or model_catalog_service.get_default_model()).strip()
@@ -276,7 +283,43 @@ def run_analysis(request: AnalysisRequest, job_id: str | None = None) -> Analysi
         report=None,
         progress_log=[],
         agent_trace=None,
+        observability=None,
     )
+
+    with JOBS_LOCK:
+        job_snapshot = dict(JOBS.get(job_id) or {}) if job_id else {}
+
+    if not job_snapshot:
+        job_snapshot = {
+            "job_id": None,
+            "status": "completed",
+            "created_at": analysis_started_at,
+            "updated_at": time.time(),
+            "llm_success": 0,
+            "llm_fallback": 0,
+            "llm_errors": 0,
+            "events": [],
+        }
+
+    analysis_finished_at = time.time()
+
+    if job_snapshot:
+        job_snapshot["status"] = "completed"
+        job_snapshot["updated_at"] = analysis_finished_at
+
+    observability_snapshot = observability_service.build_snapshot(
+        result=response,
+        job_state=job_snapshot,
+        started_at=analysis_started_at,
+        finished_at=analysis_finished_at,
+    )
+
+    observability_file = observability_service.save_snapshot(observability_snapshot)
+
+    if observability_file:
+        observability_snapshot["file"] = observability_file
+
+    response.observability = observability_snapshot
 
     report_info = report_service.save_analysis_report(
         result=response,
@@ -383,6 +426,7 @@ def health() -> dict:
         "cv_dir": str(file_service.cv_dir),
         "llm": get_llm_status(),
         "reports_dir": str(report_service.reports_dir),
+        "observability_dir": str(observability_service.observability_dir),
     }
 
 

@@ -79,3 +79,4 @@ class AnalysisResponse(BaseModel):
     report: dict | None = None
     progress_log: list[str] = []
     agent_trace: dict[str, Any] | None = None
+    observability: dict[str, Any] | None = None
