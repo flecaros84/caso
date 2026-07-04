@@ -61,22 +61,22 @@
 
       <div id="progressPanel" class="progress-panel hidden">
 
-          <div class="progress-header">
-            <strong>Progreso del análisis</strong>
-            <span id="progressPercent">0%</span>
-          </div>
-          <div class="progress-bar">
-            <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
-          </div>
-          <p id="progressStep" class="progress-step">Esperando inicio...</p>
-          <div class="progress-metrics">
-            <span id="llmSuccessCount">LLM OK: 0</span>
-            <span id="llmFallbackCount">Fallback: 0</span>
-            <span id="llmErrorCount">Errores: 0</span>
-          </div>
-          <div class="progress-events-title" id="progressEventsHeader">Bitácora completa de ejecución (0 eventos)</div>
-          <div id="progressEvents" class="progress-events"></div>
+        <div class="progress-header">
+          <strong>Progreso del análisis</strong>
+          <span id="progressPercent">0%</span>
         </div>
+        <div class="progress-bar">
+          <div id="progressFill" class="progress-fill" style="width: 0%;"></div>
+        </div>
+        <p id="progressStep" class="progress-step">Esperando inicio...</p>
+        <div class="progress-metrics">
+          <span id="llmSuccessCount">LLM OK: 0</span>
+          <span id="llmFallbackCount">Fallback: 0</span>
+          <span id="llmErrorCount">Errores: 0</span>
+        </div>
+        <div class="progress-events-title" id="progressEventsHeader">Bitácora completa de ejecución (0 eventos)</div>
+        <div id="progressEvents" class="progress-events"></div>
+      </div>
     </section>
 
     <section class="card wide">
@@ -99,8 +99,19 @@
       <div id="report" class="report-box empty">Sin reporte todavía.</div>
     </section>
 
+    <section class="card">
+      <h2>7. Dashboard de observabilidad</h2>
+      <p class="section-help">
+        Métricas automáticas sobre latencia, uso de LLM, fallback, errores, evidencia documental y anomalías del
+        análisis.
+      </p>
+      <div id="observability" class="observability-dashboard empty">
+        Sin métricas todavía.
+      </div>
+    </section>
+
     <section class="card wide">
-      <h2>7. Trazabilidad del agente</h2>
+      <h2>8. Trazabilidad del agente</h2>
       <div id="agentTrace" class="agent-trace empty">
         Ejecuta el análisis con la opción "Usar agente LangChain" para ver la trazabilidad.
       </div>
