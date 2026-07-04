@@ -73,6 +73,11 @@ Desarrollar un prototipo de aplicación basada en **IA generativa, RAG y agentes
 - Declarar herramientas de consulta, razonamiento, escritura y memoria para el agente.
 - Registrar la planificación, decisiones adaptativas, herramientas ejecutadas y memoria del agente.
 - Permitir comparar el flujo clásico con el flujo orquestado por agente.
+- Implementar observabilidad para el flujo clásico y para el flujo con agente LangChain.
+- Mostrar un dashboard de observabilidad con métricas, anomalías, recomendaciones y uso responsable.
+- Generar archivos JSON de observabilidad por ejecución.
+- Incorporar observabilidad en los reportes Markdown generados automáticamente.
+- Mejorar la resiliencia del cliente LLM mediante fallback rápido ante rate limit `429`.
 
 ---
 
@@ -294,6 +299,8 @@ La aplicación combina tecnologías de frontend, backend, procesamiento document
 | Configuración de modelos | JSON | Definición de modelos disponibles para el selector del frontend. |
 | HTTP | requests | Comunicación del backend con GitHub Models. |
 | Reportes | Markdown y JSON | Generación de reportes locales legibles y técnicos. |
+| Observabilidad backend | Python + JSON | Construcción de snapshots de observabilidad, detección de anomalías y recomendaciones. |
+| Observabilidad frontend | Dashboard propio HTML/CSS/JS | Visualización de métricas, anomalías, recomendaciones y uso responsable. |
 
 ---
 
@@ -329,6 +336,8 @@ El frontend permite:
 - revisar ranking y terna;
 - abrir reportes generados;
 - visualizar la trazabilidad del agente cuando se activa el flujo LangChain.
+- visualizar dashboard de observabilidad tanto en flujo clásico como en modo agente;
+- revisar anomalías, recomendaciones y criterios de uso responsable desde la interfaz.
 
 ---
 
@@ -456,6 +465,7 @@ GITHUB_MODELS_ENDPOINT=https://models.github.ai/inference/chat/completions
 LLM_REQUEST_DELAY_SECONDS=12
 LLM_MAX_RETRIES=4
 LLM_RETRY_BASE_SECONDS=10
+LLM_FAIL_FAST_ON_RATE_LIMIT=true
 ```
 
 ---
@@ -610,6 +620,8 @@ Genera dos reportes:
 
 Cuando el flujo se ejecuta con agente, el reporte puede incluir una sección adicional de orquestación con herramientas, planificación, decisiones adaptativas y memoria.
 
+En la versión EP3, el reporte Markdown también incluye una sección de observabilidad con métricas de latencia, uso de LLM, fallback, errores, calidad de evidencia, anomalías, recomendaciones y uso responsable.
+
 ---
 
 ### 11.11 Catálogo de modelos LLM
@@ -679,6 +691,48 @@ El agente reutiliza servicios existentes del backend, como `FileService`, `TextE
 
 ---
 
+### 11.13 Servicio de observabilidad
+
+Archivo:
+
+```text
+app/backend/app/services/observability_service.py
+```
+
+Tecnologías utilizadas:
+
+- Python;
+- JSON;
+- reglas simples de detección de anomalías;
+- escritura de archivos locales.
+
+Este componente construye un resumen observable de cada ejecución del análisis. Se utiliza tanto en el flujo clásico como en el flujo con agente LangChain.
+
+Sus responsabilidades son:
+
+- medir latencia total de la ejecución;
+- calcular latencia promedio por candidato;
+- calcular latencia promedio por evaluación;
+- contabilizar llamadas exitosas al LLM;
+- contabilizar usos de fallback local;
+- contabilizar errores asociados al LLM;
+- medir calidad de evidencia documental;
+- resumir comportamiento del ranking;
+- registrar eventos de trazabilidad;
+- detectar anomalías;
+- generar recomendaciones automáticas;
+- dejar explícitos criterios de seguridad y uso responsable.
+
+Los snapshots se guardan en:
+
+```text
+app/backend/outputs/observability/
+```
+
+Cada archivo de observabilidad queda asociado a un `trace_id`, lo que permite relacionar la ejecución del frontend, la bitácora del backend, el reporte Markdown y el JSON técnico.
+
+---
+
 ## 12. Arquitectura general
 
 ```mermaid
@@ -703,11 +757,14 @@ flowchart LR
     G --> L
     F --> M[Embeddings locales]
     I --> N[Reportes MD y JSON]
+    B --> Z[Observabilidad]
+    Z --> Z1[Dashboard + JSON + reportes]
 
     AG --> P[Herramientas LangChain]
     AG --> Q[Planner]
     AG --> R[Memoria JSON]
     AG --> S[agent_trace]
+    AG --> Z
 ```
 
 ---
@@ -736,7 +793,7 @@ El fallback local permite que el prototipo no se detenga completamente. En ese m
 | LLM disponible | Se usa GitHub Models para análisis generativo. |
 | LLM con error | Se usa fallback local. |
 | LLM desactivado | Se usa análisis local. |
-| Muchas llamadas al LLM | Se aplican pausas y reintentos. |
+| Muchas llamadas al LLM | Se aplican pausas, reintentos controlados o fallback rápido ante rate limit `429`. |
 
 ---
 
@@ -786,6 +843,20 @@ Esta sección muestra:
 - herramientas ejecutadas;
 - memoria de largo plazo.
 
+En la versión EP3, al finalizar el análisis también se muestra el dashboard de observabilidad. Este dashboard aparece tanto para el flujo clásico como para el flujo con agente LangChain, siempre que el backend entregue el campo `observability` en la respuesta final.
+
+El dashboard permite revisar:
+
+- latencia total;
+- latencia por candidato;
+- uso de LLM;
+- fallback local;
+- errores;
+- calidad de evidencia;
+- anomalías;
+- recomendaciones;
+- uso responsable.
+
 ---
 
 ## 15. Uso de modelos de GitHub Models
@@ -807,6 +878,7 @@ GITHUB_MODELS_ENDPOINT=https://models.github.ai/inference/chat/completions
 LLM_REQUEST_DELAY_SECONDS=12
 LLM_MAX_RETRIES=4
 LLM_RETRY_BASE_SECONDS=10
+LLM_FAIL_FAST_ON_RATE_LIMIT=true
 ```
 
 Significado básico:
@@ -1151,6 +1223,14 @@ En esa sección se visualizan:
 - herramientas ejecutadas;
 - memoria de largo plazo.
 
+Además, en la versión EP3 el flujo con agente también genera el campo:
+
+```text
+observability
+```
+
+Este campo contiene métricas de ejecución, eventos, uso de LLM, fallback, errores, calidad de evidencia, anomalías, recomendaciones y uso responsable. De esta forma, la observabilidad no queda limitada al flujo clásico, sino que también cubre el modo agente.
+
 ### 16.9 Reporte generado por el agente
 
 El flujo con agente también genera reportes locales en:
@@ -1241,6 +1321,16 @@ Una ejecución correcta del flujo con agente debe incluir:
     "framework": "LangChain",
     "agent_type": "openai_tools_agent",
     "execution_mode": "langchain_planned_controlled_execution"
+  },
+  "observability": {
+    "status": "completed",
+    "duration_seconds": 215.2,
+    "llm": {
+      "success_count": 8,
+      "fallback_count": 0,
+      "error_count": 0
+    },
+    "anomalies": []
   }
 }
 ```
@@ -1610,7 +1700,7 @@ Si el LLM no responde correctamente, el sistema no se detiene de inmediato. En l
 | Fallo al deducir competencias | Reglas genéricas que extraen requisitos desde secciones, viñetas y frases del anuncio. | `competency_service.py` |
 | Fallo al evaluar evidencia | Evaluación por similitud semántica entre competencia y fragmentos recuperados del CV. | `evaluator_service.py` |
 | Fallo de planificación del agente | Se continúa con el plan determinístico controlado. | `langchain_recruitment_agent.py` |
-| Fallo por exceso de llamadas | Pausas, reintentos y espera progresiva. | `llm_client.py` |
+| Fallo por exceso de llamadas | Pausas, reintentos controlados o fallback rápido ante rate limit `429`. | `llm_client.py` |
 
 Esto permite que la aplicación siga generando un resultado aunque GitHub Models falle, esté limitado por muchas solicitudes o entregue una respuesta no válida.
 
@@ -1669,6 +1759,8 @@ Algunas mejoras posibles son:
 - almacenar historial de procesos de selección;
 - generar reportes PDF;
 - mejorar el selector de modelos LLM agregando métricas comparativas de tiempo de respuesta, errores y calidad del resultado;
+- estimar costo monetario por tokens si el proveedor entrega información de uso;
+- integrar observabilidad con Grafana, Kibana u otra herramienta externa si el prototipo evoluciona a producción;
 - agregar revisión ética automática más detallada;
 - integrar correo de postulaciones;
 - permitir editar pesos de competencias antes del ranking;
@@ -1691,9 +1783,9 @@ El resultado final no reemplaza al equipo de talento, sino que entrega una ayuda
 
 ## 22. Implementación de observabilidad para EP3
 
-Para la Evaluación Parcial N°3 se incorporó una capa de observabilidad sobre la aplicación RAG de evaluación de candidatos. El objetivo fue medir el comportamiento real del agente durante la ejecución, registrar eventos relevantes, detectar anomalías y proponer mejoras técnicas basadas en evidencia.
+Para la Evaluación Parcial N°3 se incorporó una capa de observabilidad sobre la aplicación RAG de evaluación de candidatos. El objetivo fue medir el comportamiento real del sistema durante la ejecución, tanto en el flujo clásico como en el flujo con agente LangChain, registrar eventos relevantes, detectar anomalías y proponer mejoras técnicas basadas en evidencia.
 
-La observabilidad implementada no reemplaza el flujo principal de análisis. Funciona como una capa adicional que registra lo que ocurre durante la ejecución del agente y genera evidencia técnica para revisar rendimiento, trazabilidad, uso de LLM, fallback local, errores y calidad de evidencia documental.
+La observabilidad implementada no reemplaza el flujo principal de análisis. Funciona como una capa adicional que registra lo que ocurre durante la ejecución y genera evidencia técnica para revisar rendimiento, trazabilidad, uso de LLM, fallback local, errores y calidad de evidencia documental. En la última versión también se integró al modo agente, por lo que el dashboard y los archivos JSON de observabilidad aparecen al ejecutar `Usar agente LangChain`.
 
 ### 22.1 Métricas implementadas
 
@@ -1702,7 +1794,7 @@ La aplicación registra automáticamente las siguientes métricas:
 | Categoría | Métricas registradas |
 |---|---|
 | Rendimiento | Latencia total, latencia promedio por candidato, latencia promedio por evaluación. |
-| Uso de LLM | Llamadas exitosas al LLM, tasa de éxito LLM, modelo utilizado. |
+| Uso de LLM | Llamadas exitosas al LLM, cantidad total de eventos LLM, tasa de éxito LLM, fallback local, errores y modelo utilizado. |
 | Fallback local | Cantidad de usos de fallback, tasa de fallback local. |
 | Errores | Errores asociados al LLM o al proveedor externo. |
 | Dataset | Anuncio analizado, cantidad de candidatos, cantidad de competencias, cantidad de evaluaciones. |
@@ -1710,6 +1802,7 @@ La aplicación registra automáticamente las siguientes métricas:
 | Ranking | Puntaje promedio, puntaje máximo, puntaje mínimo, margen entre candidatos. |
 | Trazabilidad | Trace ID, eventos de ejecución, archivo JSON de observabilidad. |
 | Uso responsable | Revisión humana requerida, variables sensibles excluidas, alcance de decisión. |
+| Costo operacional aproximado | Cantidad de llamadas LLM, uso de fallback, errores y latencia como aproximación al consumo del agente. |
 
 Estas métricas permiten observar tanto el comportamiento técnico del sistema como la calidad del resultado generado.
 
@@ -1721,7 +1814,7 @@ Se agregó un dashboard visual en el frontend con una sección llamada:
 Dashboard de observabilidad
 ```
 
-Este panel muestra, al finalizar cada análisis:
+Este panel muestra, al finalizar cada análisis clásico o con agente:
 
 - latencia total;
 - latencia por candidato;
@@ -1865,6 +1958,47 @@ Bases válidas para evaluar:
 
 Esto permite evidenciar que la aplicación considera criterios de seguridad, privacidad y responsabilidad en el uso de IA.
 
+
+### 22.8 Observabilidad en modo agente LangChain
+
+Inicialmente la observabilidad se integró al flujo clásico. Posteriormente se extendió el mismo mecanismo al flujo con agente LangChain, de modo que ambos modos entregan métricas comparables.
+
+Cuando se ejecuta el modo agente, el resultado final incluye simultáneamente:
+
+- `agent_trace`, con planificación, herramientas, decisiones adaptativas, llamadas a herramientas y memoria;
+- `observability`, con métricas, eventos, anomalías y recomendaciones;
+- reporte Markdown y JSON con la información final del análisis;
+- archivo JSON de observabilidad asociado a un `trace_id`.
+
+Ejemplo de métricas observadas en una ejecución con agente:
+
+```json
+{
+  "status": "completed",
+  "duration_seconds": 215.2,
+  "dataset": {
+    "candidate_count": 1,
+    "competency_count": 8,
+    "evaluation_count": 8
+  },
+  "llm": {
+    "success_count": 8,
+    "fallback_count": 0,
+    "error_count": 0,
+    "success_rate": 100.0
+  },
+  "performance": {
+    "average_latency_per_evaluation_seconds": 26.9
+  },
+  "anomalies": [
+    "baja_evidencia_documental",
+    "latencia_alta"
+  ]
+}
+```
+
+Esto permite demostrar que la observabilidad no solo mide el pipeline clásico, sino también el comportamiento del agente, incluyendo tiempos, calidad de evidencia, eventos de evaluación, uso de LLM y recomendaciones.
+
 ---
 
 ## 23. Archivos nuevos y modificados para EP3
@@ -1880,10 +2014,10 @@ Esto permite evidenciar que la aplicación considera criterios de seguridad, pri
 
 | Archivo | Cambio realizado |
 |---|---|
-| `app/backend/app/main.py` | Se integró el servicio de observabilidad al flujo de análisis. Se genera snapshot al finalizar cada ejecución y se adjunta al resultado. |
+| `app/backend/app/main.py` | Se integró el servicio de observabilidad al flujo clásico y al flujo con agente LangChain. Se genera snapshot al finalizar cada ejecución y se adjunta al resultado. |
 | `app/backend/app/config.py` | Se agregó configuración para fallback rápido ante rate limit del LLM. |
 | `app/backend/app/services/llm_client.py` | Se incorporó lógica para activar fallback local inmediato ante error `429 Too Many Requests`, evitando esperas largas innecesarias. |
-| `app/backend/app/services/report_service.py` | Se agregó una sección de observabilidad al reporte Markdown generado automáticamente. |
+| `app/backend/app/services/report_service.py` | Se agregó una sección de observabilidad al reporte Markdown generado automáticamente, incluyendo métricas, anomalías, recomendaciones y uso responsable. |
 | `app/backend/app/models/schemas.py` | Se agregó el campo `observability` a la respuesta del análisis. |
 | `app/frontend/index.html` | Se agregó la sección visual “Dashboard de observabilidad”. |
 | `app/frontend/app.js` | Se agregó renderizado de métricas, anomalías, recomendaciones y uso responsable. También se mejoró el manejo de valores cero en HTML. |
@@ -1915,10 +2049,10 @@ La implementación de observabilidad permite cubrir los principales criterios de
 | Indicador | Cumplimiento en el proyecto |
 |---|---|
 | IE1: Métricas de precisión, consistencia y errores | Se registran tasas de éxito LLM, fallback local, errores, evidencia promedio, evidencia débil y evidencia fuerte. |
-| IE2: Medición de latencia y recursos | Se mide latencia total, latencia por candidato y latencia por evaluación. |
-| IE3: Análisis de logs y trazabilidad | Se registra una bitácora completa de eventos por ejecución, asociada a un `trace_id`. |
+| IE2: Medición de latencia y recursos | Se mide latencia total, latencia por candidato, latencia por evaluación y cantidad de eventos LLM como aproximación al consumo operativo. |
+| IE3: Análisis de logs y trazabilidad | Se registra una bitácora completa de eventos por ejecución, asociada a un `trace_id`, tanto en flujo clásico como en modo agente. |
 | IE4: Identificación de patrones y anomalías | Se detectan anomalías como alto fallback, errores LLM, baja evidencia, ranking estrecho y latencia alta. |
-| IE5: Dashboard de observabilidad | Se implementó un dashboard visual en el frontend con métricas, anomalías, recomendaciones y uso responsable. |
+| IE5: Dashboard de observabilidad | Se implementó un dashboard visual en el frontend con métricas, anomalías, recomendaciones y uso responsable para ambos modos de ejecución. |
 | IE6: Seguridad, privacidad y uso responsable | Se explicita revisión humana obligatoria, alcance documental y exclusión de variables sensibles. |
 | IE7: Recomendaciones de sostenibilidad, escalabilidad y mejora | Se generan recomendaciones automáticas. Además, se implementó fallback rápido ante `429` para reducir latencia y mejorar resiliencia. |
 | IE8: Informe técnico con evidencia | Los reportes Markdown y JSON incluyen resultados del análisis y sección de observabilidad. |
@@ -1933,6 +2067,7 @@ La aplicación genera evidencia en tres niveles:
 | Frontend | Dashboard de observabilidad visible al finalizar el análisis. |
 | Backend | JSON de observabilidad en `app/backend/outputs/observability/`. |
 | Reporte | Markdown y JSON en `app/backend/outputs/reports/`. |
+| Agente | `agent_trace` y `observability` disponibles en el resultado del modo LangChain. |
 
 Ejemplo de archivo de observabilidad:
 
@@ -1968,6 +2103,7 @@ La entrega queda en estado funcional y defendible para observabilidad.
 ### Implementado
 
 - Dashboard de observabilidad en frontend.
+- Observabilidad funcionando tanto en flujo clásico como en modo agente LangChain.
 - Servicio backend de observabilidad.
 - Métricas de latencia.
 - Métricas de uso LLM.
@@ -1985,7 +2121,7 @@ La entrega queda en estado funcional y defendible para observabilidad.
 ### Parcial o mejorable
 
 - No se implementó integración con Grafana, Kibana o herramientas externas.
-- No se midió consumo real de CPU, memoria o costo monetario.
+- No se midió consumo real de CPU, memoria ni costo monetario exacto por tokens. Sin embargo, la observabilidad sí registra métricas operativas asociadas al costo de uso del agente, como cantidad de llamadas LLM, fallback, errores, latencia total y latencia promedio por evaluación.
 - Las anomalías se detectan mediante reglas simples, no mediante modelos estadísticos avanzados.
 - El dashboard es propio de la aplicación, no una solución externa especializada.
 - La evaluación de calidad usa evidencia documental como aproximación, no validación humana etiquetada.
@@ -1998,30 +2134,8 @@ Para el contexto del prototipo académico, se priorizó una observabilidad integ
 
 ## 26. Conclusión actualizada para EP3
 
-La aplicación evolucionó desde un prototipo RAG para evaluación documental hacia una solución con observabilidad integrada. Además de deducir competencias, evaluar CV y generar ranking, ahora el sistema registra métricas de ejecución, detecta anomalías, genera recomendaciones y deja evidencia técnica en dashboard, JSON y reportes Markdown.
+La aplicación evolucionó desde un prototipo RAG para evaluación documental hacia una solución con observabilidad integrada. Además de deducir competencias, evaluar CV y generar ranking, ahora el sistema registra métricas de ejecución, detecta anomalías, genera recomendaciones y deja evidencia técnica en dashboard, JSON y reportes Markdown. Esta observabilidad se encuentra disponible tanto para el flujo clásico como para el flujo alternativo con agente LangChain.
 
 La mejora más relevante fue identificar, mediante logs, que ciertos modelos podían generar latencias elevadas por errores `429 Too Many Requests`. A partir de ese hallazgo se implementó fallback rápido, reduciendo la dependencia de reintentos prolongados y mejorando la continuidad del análisis.
 
 Con esta actualización, el proyecto no solo entrega resultados de IA, sino también evidencia sobre cómo se comporta el agente, qué tan estable fue la ejecución, cuándo se usó fallback, qué anomalías se detectaron y qué acciones de mejora se recomiendan. Esto permite defender la solución desde una perspectiva técnica, ética y operacional.
-
----
-
-## Cambios puntuales recomendados en secciones anteriores
-
-En la sección 13, reemplazar la fila:
-
-```markdown
-| Muchas llamadas al LLM | Se aplican pausas y reintentos. |
-```
-
-por:
-
-```markdown
-| Muchas llamadas al LLM | Se aplican pausas, reintentos controlados o fallback rápido ante rate limit `429`. |
-```
-
-En el ejemplo `.env` de la sección 15, agregar:
-
-```env
-LLM_FAIL_FAST_ON_RATE_LIMIT=true
-```
