@@ -21,6 +21,18 @@ class Settings(BaseSettings):
         alias="LLM_FAIL_FAST_ON_RATE_LIMIT",
     )
 
+    # Costos de referencia en USD por cada millón de tokens.
+    # Se utilizan para estimar el costo de entrada y salida del LLM.
+    llm_input_cost_per_1m_tokens_usd: float = Field(
+        default=0.0,
+        alias="LLM_INPUT_COST_PER_1M_TOKENS_USD",
+    )
+
+    llm_output_cost_per_1m_tokens_usd: float = Field(
+        default=0.0,
+        alias="LLM_OUTPUT_COST_PER_1M_TOKENS_USD",
+    )
+
     data_root: str = Field(default="../../resources", alias="DATA_ROOT")
     announcements_dir: str = Field(default="../../resources/img/announcements", alias="ANNOUNCEMENTS_DIR")
     cv_dir: str = Field(default="../../resources/pdf/cv", alias="CV_DIR")

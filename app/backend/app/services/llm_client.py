@@ -30,6 +30,11 @@ class GitHubModelsClient:
         self.max_retries = int(settings.llm_max_retries)
         self.retry_base_seconds = int(settings.llm_retry_base_seconds)
         self.fail_fast_on_rate_limit = bool(settings.llm_fail_fast_on_rate_limit)
+        # Contadores acumulados de tokens para la ejecución actual.
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.total_tokens = 0
+        self._usage_lock = threading.Lock()
 
     def complete_json(
         self,
@@ -104,10 +109,17 @@ class GitHubModelsClient:
                     print(f"[LLM SERVER ERROR] {response.status_code}. Waiting {wait_seconds} seconds...")
                     time.sleep(wait_seconds)
                     continue
-
+                
                 response.raise_for_status()
-                content = response.json()["choices"][0]["message"]["content"]
+
+                # La respuesta incluye el contenido generado y, cuando está
+                # disponible, la cantidad de tokens utilizados.
+                response_data = response.json()
+                self._record_usage(response_data.get("usage"))
+
+                content = response_data["choices"][0]["message"]["content"]
                 parsed = self._parse_json(content)
+
                 if parsed is not None:
                     print("[LLM SUCCESS] Valid JSON received.")
                 return parsed
@@ -134,6 +146,96 @@ class GitHubModelsClient:
 
         print("[LLM FALLBACK] Max retries reached. Using local fallback when available.")
         return None
+    
+    def record_external_usage(self, usage: Any) -> None:
+        """
+        Registra tokens provenientes de una llamada externa.
+
+        Se utiliza, por ejemplo, para sumar el consumo de la
+        planificación realizada directamente por LangChain.
+        """
+
+        self._record_usage(usage)
+    
+    def _record_usage(self, usage: Any) -> None:
+        """Acumula los tokens informados por GitHub Models."""
+
+        if not isinstance(usage, dict):
+            return
+
+        # Se aceptan ambos nombres para mantener compatibilidad
+        # con distintos endpoints de modelos.
+        prompt_tokens = self._safe_token_value(
+            usage.get("prompt_tokens", usage.get("input_tokens", 0))
+        )
+        completion_tokens = self._safe_token_value(
+            usage.get("completion_tokens", usage.get("output_tokens", 0))
+        )
+        total_tokens = self._safe_token_value(usage.get("total_tokens", 0))
+
+        # Si el proveedor no informa el total, lo calculamos.
+        if total_tokens == 0:
+            total_tokens = prompt_tokens + completion_tokens
+
+        with self._usage_lock:
+            self.prompt_tokens += prompt_tokens
+            self.completion_tokens += completion_tokens
+            self.total_tokens += total_tokens
+
+    def get_usage_summary(self) -> dict[str, Any]:
+        """Entrega el consumo acumulado y su costo estimado."""
+
+        # Copiamos los contadores de forma segura.
+        with self._usage_lock:
+            prompt_tokens = self.prompt_tokens
+            completion_tokens = self.completion_tokens
+            total_tokens = self.total_tokens
+
+        # Tarifas configuradas en el archivo .env.
+        input_price = settings.llm_input_cost_per_1m_tokens_usd
+        output_price = settings.llm_output_cost_per_1m_tokens_usd
+
+        # El precio se configura por cada millón de tokens.
+        estimated_input_cost = (
+            prompt_tokens * input_price / 1_000_000
+        )
+        estimated_output_cost = (
+            completion_tokens * output_price / 1_000_000
+        )
+        estimated_total_cost = (
+            estimated_input_cost + estimated_output_cost
+        )
+
+        return {
+            "model": self.model,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "input_cost_per_1m_tokens_usd": input_price,
+            "output_cost_per_1m_tokens_usd": output_price,
+            "estimated_input_cost_usd": round(
+                estimated_input_cost,
+                8,
+            ),
+            "estimated_output_cost_usd": round(
+                estimated_output_cost,
+                8,
+            ),
+            "estimated_total_cost_usd": round(
+                estimated_total_cost,
+                8,
+            ),
+            "cost_is_estimate": True,
+        }
+
+    @staticmethod
+    def _safe_token_value(value: Any) -> int:
+        """Convierte un valor de tokens a entero sin romper la ejecución."""
+
+        try:
+            return max(int(value or 0), 0)
+        except (TypeError, ValueError):
+            return 0
 
     def _wait_before_request(self) -> None:
         with GitHubModelsClient._lock:

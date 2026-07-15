@@ -23,6 +23,7 @@ from app.services.model_catalog_service import ModelCatalogService
 from app.services.ranking_service import RankingService
 from app.services.report_service import ReportService
 from app.services.text_extractor import TextExtractor
+from app.agents.token_usage_callback import LangChainTokenUsageCallback
 
 
 class LangChainRecruitmentAgent:
@@ -121,6 +122,7 @@ class LangChainRecruitmentAgent:
             tools=tools,
             memory=memory,
             selected_model=selected_model,
+            usage_recorder=llm_client,
         )
 
         memory.add_step(
@@ -275,6 +277,10 @@ class LangChainRecruitmentAgent:
             report=None,
             progress_log=progress_log,
             agent_trace=None,
+
+            # Consumo de las llamadas de extracción y evaluación del agente.
+            # La planificación LangChain se contabilizará por separado.
+            llm_usage=llm_client.get_usage_summary(),
         )
 
         # Build a preliminary trace before report generation so the Markdown report
@@ -354,6 +360,7 @@ class LangChainRecruitmentAgent:
         tools: list[Any],
         memory: AgentMemory,
         selected_model: str,
+        usage_recorder: GitHubModelsClient,
     ) -> str:
         if not self._is_llm_available():
             memory.add_decision(
@@ -407,14 +414,24 @@ class LangChainRecruitmentAgent:
                 max_iterations=3,
             )
 
+            token_usage_callback = LangChainTokenUsageCallback(
+                usage_recorder
+            )
+
             response = executor.invoke(
                 {
                     "announcement_id": request.announcement_id,
                     "cv_count": len(request.cv_ids),
                     "selected_model": selected_model,
                     "plan": json.dumps(plan, ensure_ascii=False),
-                    "decisions": json.dumps(decisions, ensure_ascii=False),
-                }
+                    "decisions": json.dumps(
+                        decisions,
+                        ensure_ascii=False,
+                    ),
+                },
+                config={
+                    "callbacks": [token_usage_callback],
+                },
             )
 
             output = str(response.get("output", response))

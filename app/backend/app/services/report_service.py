@@ -220,6 +220,66 @@ class ReportService:
             lines.append("")
 
         # ------------------------------------------------------------------
+        # Consumo de tokens y costo estimado
+        # ------------------------------------------------------------------
+        llm_usage = result.get("llm_usage") or {}
+
+        if llm_usage:
+            prompt_tokens = int(llm_usage.get("prompt_tokens") or 0)
+            completion_tokens = int(
+                llm_usage.get("completion_tokens") or 0
+            )
+            total_tokens = int(llm_usage.get("total_tokens") or 0)
+
+            input_cost = float(
+                llm_usage.get("estimated_input_cost_usd") or 0
+            )
+            output_cost = float(
+                llm_usage.get("estimated_output_cost_usd") or 0
+            )
+            total_cost = float(
+                llm_usage.get("estimated_total_cost_usd") or 0
+            )
+
+            lines.append("## Consumo del modelo")
+            lines.append("")
+            lines.append(
+                "Los siguientes valores corresponden al consumo acumulado "
+                "durante esta ejecución."
+            )
+            lines.append("")
+            lines.append("| Métrica | Valor |")
+            lines.append("|---|---:|")
+            lines.append(
+                f"| Modelo utilizado | "
+                f"`{self._md_cell(llm_usage.get('model', 'No informado'))}` |"
+            )
+            lines.append(
+                f"| Tokens de entrada | {prompt_tokens:,} |"
+            )
+            lines.append(
+                f"| Tokens de salida | {completion_tokens:,} |"
+            )
+            lines.append(
+                f"| Tokens totales | {total_tokens:,} |"
+            )
+            lines.append(
+                f"| Costo estimado de entrada | USD {input_cost:.8f} |"
+            )
+            lines.append(
+                f"| Costo estimado de salida | USD {output_cost:.8f} |"
+            )
+            lines.append(
+                f"| **Costo total estimado** | **USD {total_cost:.8f}** |"
+            )
+            lines.append("")
+            lines.append(
+                "> El costo es una aproximación calculada con las tarifas "
+                "configuradas en las variables de entorno."
+            )
+            lines.append("")
+
+        # ------------------------------------------------------------------
         # Competencias deducidas desde el anuncio
         # ------------------------------------------------------------------
         lines.append("## Competencias deducidas")

@@ -80,3 +80,5 @@ class AnalysisResponse(BaseModel):
     progress_log: list[str] = []
     agent_trace: dict[str, Any] | None = None
     observability: dict[str, Any] | None = None
+    # Consumo acumulado de tokens y costo estimado del análisis.
+    llm_usage: dict[str, Any] | None = None
