@@ -284,6 +284,7 @@ def run_analysis(request: AnalysisRequest, job_id: str | None = None) -> Analysi
         progress_log=[],
         agent_trace=None,
         observability=None,
+        llm_usage=llm_client.get_usage_summary(),
     )
 
     with JOBS_LOCK:

@@ -1,5 +1,7 @@
 # Caso 3 - Aplicación RAG para evaluación de candidatos por competencias
 
+**Entrega final: Examen Transversal**
+
 ## 1. Resumen del proyecto
 
 Este proyecto consiste en una aplicación web sencilla que apoya el proceso de preselección de candidatos para **Salmones Camanchaca S.A.**, empresa del rubro salmonero en Chile.
@@ -78,25 +80,28 @@ Desarrollar un prototipo de aplicación basada en **IA generativa, RAG y agentes
 - Generar archivos JSON de observabilidad por ejecución.
 - Incorporar observabilidad en los reportes Markdown generados automáticamente.
 - Mejorar la resiliencia del cliente LLM mediante fallback rápido ante rate limit `429`.
+- Contabilizar tokens de entrada, salida y totales utilizados por el modelo.
+- Estimar el costo de cada análisis mediante tarifas configurables en variables de entorno.
+- Mostrar el consumo y costo estimado en el frontend y en los reportes Markdown y JSON.
 
 ---
 
-## 6. Cómo cumple con la pauta de la EP1
+## 6. Integración del proyecto para el Examen Transversal
 
-El proyecto cumple con los principales elementos esperados para una entrega inicial de solución basada en IA generativa, ya que presenta un caso organizacional concreto, una problemática clara, una arquitectura funcional y un prototipo demostrable.
+El Examen Transversal consolida en una sola solución los componentes desarrollados durante el semestre. El proyecto presenta un caso organizacional concreto, una arquitectura funcional y un prototipo demostrable que integra IA generativa, RAG, agentes, observabilidad, trazabilidad y estimación de consumo.
 
-| Elemento esperado | Cómo se cumple en el proyecto |
+| Componente integrado | Cómo se implementa en el proyecto |
 |---|---|
-| Organización seleccionada | Se trabaja con Salmones Camanchaca S.A., empresa del rubro salmonero. |
-| Problema o desafío | Se aborda la revisión documental de postulantes y la preselección de candidatos. |
-| Motivación para usar IA | La IA permite analizar texto no estructurado presente en anuncios y CV. |
-| Uso de LLM | Se utiliza un modelo de GitHub Models para deducir competencias y evaluar evidencia. |
-| Uso de RAG | Se recuperan fragmentos relevantes de los CV antes de evaluar al candidato. |
-| Uso de agente | Se incorpora un flujo alternativo con agente LangChain, herramientas, planificación y memoria. |
-| Prompts | El sistema utiliza instrucciones para extracción de competencias, evaluación por evidencia y planificación del agente. |
-| Arquitectura | Se implementa frontend, backend, servicios internos, RAG, LLM, fallback, agente y generación de reportes. |
-| Evidencia de funcionamiento | La app muestra progreso, llamadas exitosas al LLM, ranking, terna, reportes locales y trazabilidad del agente. |
-| Consideraciones éticas | Se evita usar edad, género, nacionalidad, fotografía, estado civil u otros datos sensibles. |
+| Contexto organizacional | Se trabaja con Salmones Camanchaca S.A. y un proceso realista de preselección documental. |
+| Problema o desafío | Se aborda la revisión de anuncios laborales y CV para apoyar la priorización de candidatos. |
+| IA generativa | GitHub Models deduce competencias y evalúa evidencia documental. |
+| RAG | Se recuperan fragmentos relevantes de cada CV antes de solicitar una evaluación al modelo. |
+| Agente inteligente | Se incorpora un flujo alternativo con LangChain, herramientas, planificación, decisiones adaptativas y memoria. |
+| Prompts y salidas estructuradas | El backend utiliza instrucciones específicas y respuestas JSON para mantener consistencia y trazabilidad. |
+| Arquitectura de software | Se implementa frontend, API FastAPI, servicios modulares, procesamiento documental, RAG, LLM, fallback, agente y reportes. |
+| Observabilidad | Se registran latencia, uso de LLM, fallback, errores, calidad de evidencia, anomalías, tokens y costo estimado. |
+| Evidencia de funcionamiento | La aplicación muestra progreso, ranking, terna, trazabilidad del agente, dashboard y reportes Markdown/JSON. |
+| Uso responsable | La solución mantiene revisión humana y excluye variables sensibles del proceso de evaluación. |
 
 ---
 
@@ -301,6 +306,8 @@ La aplicación combina tecnologías de frontend, backend, procesamiento document
 | Reportes | Markdown y JSON | Generación de reportes locales legibles y técnicos. |
 | Observabilidad backend | Python + JSON | Construcción de snapshots de observabilidad, detección de anomalías y recomendaciones. |
 | Observabilidad frontend | Dashboard propio HTML/CSS/JS | Visualización de métricas, anomalías, recomendaciones y uso responsable. |
+| Medición de tokens | Metadatos `usage` de GitHub Models | Registro acumulado de tokens de entrada, salida y totales. |
+| Estimación de costo | Python + variables de entorno | Cálculo aproximado en USD según tarifas configurables por millón de tokens. |
 
 ---
 
@@ -337,7 +344,8 @@ El frontend permite:
 - abrir reportes generados;
 - visualizar la trazabilidad del agente cuando se activa el flujo LangChain.
 - visualizar dashboard de observabilidad tanto en flujo clásico como en modo agente;
-- revisar anomalías, recomendaciones y criterios de uso responsable desde la interfaz.
+- revisar anomalías, recomendaciones y criterios de uso responsable desde la interfaz;
+- visualizar tokens de entrada, tokens de salida, tokens totales y costo estimado de la ejecución.
 
 ---
 
@@ -453,6 +461,9 @@ Sus responsabilidades son:
 - recibir respuestas JSON;
 - controlar pausas entre llamadas para evitar errores `429 Too Many Requests`;
 - reintentar llamadas cuando el servicio responde con límite de solicitudes o error temporal;
+- registrar los tokens informados en el campo `usage` de cada respuesta;
+- acumular tokens de entrada, salida y totales durante una ejecución;
+- calcular un costo estimado en USD según tarifas configuradas en `.env`;
 - avisar si una llamada fue exitosa o falló.
 
 Ejemplo de configuración:
@@ -466,6 +477,10 @@ LLM_REQUEST_DELAY_SECONDS=12
 LLM_MAX_RETRIES=4
 LLM_RETRY_BASE_SECONDS=10
 LLM_FAIL_FAST_ON_RATE_LIMIT=true
+
+# Tarifas de referencia en USD por cada millón de tokens.
+LLM_INPUT_COST_PER_1M_TOKENS_USD=0.15
+LLM_OUTPUT_COST_PER_1M_TOKENS_USD=0.60
 ```
 
 ---
@@ -620,7 +635,9 @@ Genera dos reportes:
 
 Cuando el flujo se ejecuta con agente, el reporte puede incluir una sección adicional de orquestación con herramientas, planificación, decisiones adaptativas y memoria.
 
-En la versión EP3, el reporte Markdown también incluye una sección de observabilidad con métricas de latencia, uso de LLM, fallback, errores, calidad de evidencia, anomalías, recomendaciones y uso responsable.
+En la versión final del Examen Transversal, el reporte Markdown también incluye una sección de observabilidad con métricas de latencia, uso de LLM, fallback, errores, calidad de evidencia, anomalías, recomendaciones y uso responsable.
+
+Además, los reportes Markdown y JSON incorporan el bloque `llm_usage`, que registra el modelo utilizado, tokens de entrada, tokens de salida, tokens totales, tarifas de referencia y costo estimado en USD.
 
 ---
 
@@ -843,7 +860,7 @@ Esta sección muestra:
 - herramientas ejecutadas;
 - memoria de largo plazo.
 
-En la versión EP3, al finalizar el análisis también se muestra el dashboard de observabilidad. Este dashboard aparece tanto para el flujo clásico como para el flujo con agente LangChain, siempre que el backend entregue el campo `observability` en la respuesta final.
+En la versión final del Examen Transversal, al finalizar el análisis también se muestra el dashboard de observabilidad. Este dashboard aparece tanto para el flujo clásico como para el flujo con agente LangChain, siempre que el backend entregue el campo `observability` en la respuesta final.
 
 El dashboard permite revisar:
 
@@ -976,6 +993,59 @@ Este selector permite:
 - evitar errores por escribir manualmente identificadores en el `.env`.
 
 > Importante: que un modelo esté listado en `github_models.json` no garantiza automáticamente que esté disponible para la cuenta actual de GitHub Models. Si el modelo no está habilitado o el identificador no coincide exactamente con el esperado por GitHub, el backend puede recibir errores como `unknown_model`.
+
+
+### 15.2 Conteo de tokens y costo estimado
+
+La aplicación registra el consumo informado por GitHub Models en cada respuesta del modelo. El cliente LLM acumula los siguientes valores durante una ejecución:
+
+| Campo | Significado |
+|---|---|
+| `prompt_tokens` | Tokens utilizados por los mensajes e instrucciones enviados al modelo. |
+| `completion_tokens` | Tokens generados por la respuesta del modelo. |
+| `total_tokens` | Suma de tokens de entrada y salida. |
+| `estimated_input_cost_usd` | Costo estimado de los tokens de entrada. |
+| `estimated_output_cost_usd` | Costo estimado de los tokens de salida. |
+| `estimated_total_cost_usd` | Costo total aproximado de la ejecución. |
+| `cost_is_estimate` | Indica que el valor es una estimación y no un cobro real del proveedor. |
+
+Las tarifas se configuran en el archivo `.env`:
+
+```env
+LLM_INPUT_COST_PER_1M_TOKENS_USD=0.15
+LLM_OUTPUT_COST_PER_1M_TOKENS_USD=0.60
+```
+
+El cálculo utilizado es:
+
+```text
+Costo de entrada =
+tokens de entrada × tarifa de entrada / 1.000.000
+
+Costo de salida =
+tokens de salida × tarifa de salida / 1.000.000
+
+Costo total estimado =
+costo de entrada + costo de salida
+```
+
+No se realizan llamadas adicionales al modelo para obtener esta métrica. El sistema utiliza la información `usage` que ya viene incluida en las respuestas de GitHub Models.
+
+Los resultados se muestran en:
+
+- la sección `Consumo del modelo` del frontend;
+- el campo `llm_usage` del resultado JSON;
+- la sección `Consumo del modelo` del reporte Markdown.
+
+#### Alcance actual del conteo
+
+En el flujo clásico, el conteo incluye las llamadas utilizadas para deducir competencias y evaluar candidatos.
+
+En el flujo con agente LangChain, el conteo incluye las llamadas de deducción de competencias y evaluación de candidatos realizadas mediante `GitHubModelsClient`. Sin embargo, la llamada adicional utilizada por `ChatOpenAI` y `AgentExecutor` para generar la planificación del agente no está incluida actualmente en el total mostrado.
+
+Durante las pruebas se verificó que una llamada directa de `ChatOpenAI` sí recibe `usage_metadata`, pero el objeto `LLMResult` entregado al callback durante la ejecución mediante `AgentExecutor` no expone esa información en la versión e integración actuales. Por esta razón, el consumo mostrado en modo agente debe interpretarse como una estimación parcial que puede ser levemente inferior al consumo total real.
+
+Esta limitación queda pendiente como mejora futura y no afecta el ranking, la evaluación de candidatos ni la generación de reportes.
 
 ---
 
@@ -1223,7 +1293,7 @@ En esa sección se visualizan:
 - herramientas ejecutadas;
 - memoria de largo plazo.
 
-Además, en la versión EP3 el flujo con agente también genera el campo:
+Además, en la versión final del Examen Transversal el flujo con agente también genera el campo:
 
 ```text
 observability
@@ -1745,6 +1815,9 @@ Algunas limitaciones son:
 - el fallback local es menos preciso que el análisis con LLM;
 - algunos modelos del catálogo pueden no estar habilitados para la cuenta actual de GitHub Models;
 - el agente LangChain mantiene una ejecución controlada y no toma decisiones autónomas fuera del flujo definido;
+- el costo calculado es una estimación basada en tarifas configurables y no representa necesariamente un cobro real del proveedor;
+- en modo agente, el conteo actual no incluye los tokens de la llamada de planificación ejecutada directamente por `ChatOpenAI` y `AgentExecutor`;
+- las tarifas deben actualizarse cuando se utiliza un modelo con precios diferentes;
 - la decisión final debe seguir siendo humana.
 
 ---
@@ -1759,7 +1832,9 @@ Algunas mejoras posibles son:
 - almacenar historial de procesos de selección;
 - generar reportes PDF;
 - mejorar el selector de modelos LLM agregando métricas comparativas de tiempo de respuesta, errores y calidad del resultado;
-- estimar costo monetario por tokens si el proveedor entrega información de uso;
+- completar el conteo de tokens de la planificación LangChain cuando `AgentExecutor` exponga los metadatos de uso al callback;
+- definir tarifas específicas por modelo dentro de `github_models.json`, evitando usar una misma tarifa para todo el catálogo;
+- comparar consumo, costo estimado, latencia y calidad entre los distintos modelos disponibles;
 - integrar observabilidad con Grafana, Kibana u otra herramienta externa si el prototipo evoluciona a producción;
 - agregar revisión ética automática más detallada;
 - integrar correo de postulaciones;
@@ -1775,15 +1850,15 @@ Algunas mejoras posibles son:
 
 El proyecto demuestra cómo aplicar IA generativa, RAG y agentes inteligentes a un caso organizacional de una empresa salmonera. La aplicación permite transformar un proceso manual de revisión de CV en un flujo más ordenado, trazable y justificable.
 
-La solución cumple con el enfoque de la pauta porque incluye análisis del caso, uso de LLM, uso de RAG, selector de modelo, arquitectura modular, prompts, trazabilidad, evaluación por evidencia, fallback local, agente LangChain, memoria del agente, herramientas formales y consideraciones éticas.
+Como solución final del Examen Transversal, el proyecto integra análisis del caso, LLM, RAG, selector de modelo, arquitectura modular, prompts, trazabilidad, evaluación por evidencia, fallback local, agente LangChain, memoria, herramientas formales, observabilidad y consideraciones éticas.
 
 El resultado final no reemplaza al equipo de talento, sino que entrega una ayuda inicial para priorizar candidatos y construir una terna recomendada basada en competencias documentadas.
 
 ---
 
-## 22. Implementación de observabilidad para EP3
+## 22. Observabilidad incorporada al Examen Transversal
 
-Para la Evaluación Parcial N°3 se incorporó una capa de observabilidad sobre la aplicación RAG de evaluación de candidatos. El objetivo fue medir el comportamiento real del sistema durante la ejecución, tanto en el flujo clásico como en el flujo con agente LangChain, registrar eventos relevantes, detectar anomalías y proponer mejoras técnicas basadas en evidencia.
+Como parte de la versión final presentada en el Examen Transversal, se incorporó una capa de observabilidad sobre la aplicación RAG de evaluación de candidatos. El objetivo es medir el comportamiento real del sistema durante la ejecución, tanto en el flujo clásico como en el flujo con agente LangChain, registrar eventos relevantes, detectar anomalías y proponer mejoras técnicas basadas en evidencia.
 
 La observabilidad implementada no reemplaza el flujo principal de análisis. Funciona como una capa adicional que registra lo que ocurre durante la ejecución y genera evidencia técnica para revisar rendimiento, trazabilidad, uso de LLM, fallback local, errores y calidad de evidencia documental. En la última versión también se integró al modo agente, por lo que el dashboard y los archivos JSON de observabilidad aparecen al ejecutar `Usar agente LangChain`.
 
@@ -1802,7 +1877,7 @@ La aplicación registra automáticamente las siguientes métricas:
 | Ranking | Puntaje promedio, puntaje máximo, puntaje mínimo, margen entre candidatos. |
 | Trazabilidad | Trace ID, eventos de ejecución, archivo JSON de observabilidad. |
 | Uso responsable | Revisión humana requerida, variables sensibles excluidas, alcance de decisión. |
-| Costo operacional aproximado | Cantidad de llamadas LLM, uso de fallback, errores y latencia como aproximación al consumo del agente. |
+| Consumo y costo estimado | Tokens de entrada, tokens de salida, tokens totales y costo aproximado en USD según tarifas configurables. En modo agente, no incluye actualmente la llamada de planificación de `AgentExecutor`. |
 
 Estas métricas permiten observar tanto el comportamiento técnico del sistema como la calidad del resultado generado.
 
@@ -1819,6 +1894,8 @@ Este panel muestra, al finalizar cada análisis clásico o con agente:
 - latencia total;
 - latencia por candidato;
 - cantidad de evaluaciones;
+- tokens de entrada, salida y totales;
+- costo total estimado en USD;
 - tasa de éxito del LLM;
 - tasa de fallback local;
 - tasa de errores;
@@ -1999,30 +2076,83 @@ Ejemplo de métricas observadas en una ejecución con agente:
 
 Esto permite demostrar que la observabilidad no solo mide el pipeline clásico, sino también el comportamiento del agente, incluyendo tiempos, calidad de evidencia, eventos de evaluación, uso de LLM y recomendaciones.
 
+
+### 22.9 Medición de tokens y costo estimado
+
+Como mejora adicional de observabilidad, se implementó un contador acumulado de tokens dentro de `GitHubModelsClient`.
+
+Cada respuesta exitosa del proveedor puede incluir un bloque `usage`. El cliente registra:
+
+```text
+prompt_tokens
+completion_tokens
+total_tokens
+```
+
+A partir de estos valores y de las tarifas configuradas en `.env`, se calcula el costo aproximado de entrada, salida y total.
+
+Ejemplo de resultado:
+
+```json
+{
+  "llm_usage": {
+    "model": "openai/gpt-4o-mini",
+    "prompt_tokens": 14952,
+    "completion_tokens": 1391,
+    "total_tokens": 16343,
+    "input_cost_per_1m_tokens_usd": 0.15,
+    "output_cost_per_1m_tokens_usd": 0.60,
+    "estimated_input_cost_usd": 0.00224280,
+    "estimated_output_cost_usd": 0.00083460,
+    "estimated_total_cost_usd": 0.00307740,
+    "cost_is_estimate": true
+  }
+}
+```
+
+La métrica se presenta en el frontend y se persiste en los reportes Markdown y JSON.
+
+#### Limitación conocida en modo agente
+
+El pipeline principal del agente utiliza el mismo `GitHubModelsClient`, por lo que contabiliza la deducción de competencias y las evaluaciones de candidatos. No obstante, la planificación inicial de LangChain se ejecuta mediante una instancia separada de `ChatOpenAI`.
+
+Se creó un callback para intentar incorporar ese consumo al contador compartido. Las pruebas demostraron que `ChatOpenAI` recibe los metadatos de tokens en llamadas directas, pero `AgentExecutor` entrega al callback un `LLMResult` sin `usage_metadata` ni `token_usage` disponibles en la integración actual.
+
+Por lo tanto:
+
+| Flujo | Cobertura actual |
+|---|---|
+| Flujo clásico | Conteo completo de las llamadas realizadas por el pipeline. |
+| Flujo con agente | Conteo de deducción y evaluaciones; planificación LangChain pendiente. |
+
+El valor mostrado en modo agente sigue siendo útil como aproximación operacional, pero puede subestimar levemente el consumo total. Esta debilidad queda documentada para una futura mejora o actualización de LangChain.
+
 ---
 
-## 23. Archivos nuevos y modificados para EP3
+## 23. Archivos relevantes de la versión final
 
 ### 23.1 Archivos nuevos
 
 | Archivo | Tipo | Descripción |
 |---|---|---|
 | `app/backend/app/services/observability_service.py` | Servicio backend | Construye métricas de observabilidad, detecta anomalías, genera recomendaciones y guarda snapshots JSON. |
+| `app/backend/app/agents/token_usage_callback.py` | Callback LangChain | Intenta recuperar los tokens de llamadas externas de LangChain y registrarlos en el contador central. La planificación de `AgentExecutor` queda pendiente por falta de metadatos en el callback. |
 | `app/backend/outputs/observability/` | Carpeta de salida | Almacena archivos JSON de observabilidad por ejecución. |
 
 ### 23.2 Archivos modificados
 
 | Archivo | Cambio realizado |
 |---|---|
-| `app/backend/app/main.py` | Se integró el servicio de observabilidad al flujo clásico y al flujo con agente LangChain. Se genera snapshot al finalizar cada ejecución y se adjunta al resultado. |
-| `app/backend/app/config.py` | Se agregó configuración para fallback rápido ante rate limit del LLM. |
-| `app/backend/app/services/llm_client.py` | Se incorporó lógica para activar fallback local inmediato ante error `429 Too Many Requests`, evitando esperas largas innecesarias. |
-| `app/backend/app/services/report_service.py` | Se agregó una sección de observabilidad al reporte Markdown generado automáticamente, incluyendo métricas, anomalías, recomendaciones y uso responsable. |
-| `app/backend/app/models/schemas.py` | Se agregó el campo `observability` a la respuesta del análisis. |
-| `app/frontend/index.html` | Se agregó la sección visual “Dashboard de observabilidad”. |
-| `app/frontend/app.js` | Se agregó renderizado de métricas, anomalías, recomendaciones y uso responsable. También se mejoró el manejo de valores cero en HTML. |
+| `app/backend/app/main.py` | Se integró el servicio de observabilidad y se incorporó `llm_usage` al resultado del flujo clásico. |
+| `app/backend/app/agents/langchain_recruitment_agent.py` | Se incorporó `llm_usage` al resultado del modo agente y se conectó el callback de tokens a la planificación LangChain. |
+| `app/backend/app/config.py` | Se agregó configuración para fallback rápido y tarifas de entrada/salida por millón de tokens. |
+| `app/backend/app/services/llm_client.py` | Se incorporó fallback rápido, conteo acumulado de tokens, registro de consumo externo y cálculo de costo estimado. |
+| `app/backend/app/services/report_service.py` | Se agregó observabilidad y una sección de consumo del modelo con tokens y costo estimado al reporte Markdown. |
+| `app/backend/app/models/schemas.py` | Se agregaron los campos `observability` y `llm_usage` a la respuesta del análisis. |
+| `app/frontend/index.html` | Se agregaron las secciones “Dashboard de observabilidad” y “Consumo del modelo”. |
+| `app/frontend/app.js` | Se agregó renderizado de observabilidad, tokens y costo estimado. También se mejoró el manejo de valores cero en HTML. |
 | `app/frontend/styles.css` | Se agregaron estilos para tarjetas de métricas, paneles de observabilidad y layout del dashboard. |
-| `.env` | Se puede configurar `LLM_FAIL_FAST_ON_RATE_LIMIT`, `LLM_MAX_RETRIES`, `LLM_RETRY_BASE_SECONDS` y `LLM_REQUEST_DELAY_SECONDS`. |
+| `.env` y `.env.example` | Se incorporaron variables de reintento/fallback y tarifas de entrada/salida por millón de tokens. |
 
 ### 23.3 Variables de entorno relevantes
 
@@ -2036,27 +2166,32 @@ LLM_REQUEST_DELAY_SECONDS=8
 LLM_MAX_RETRIES=1
 LLM_RETRY_BASE_SECONDS=5
 LLM_FAIL_FAST_ON_RATE_LIMIT=true
+
+LLM_INPUT_COST_PER_1M_TOKENS_USD=0.15
+LLM_OUTPUT_COST_PER_1M_TOKENS_USD=0.60
 ```
 
-Estas variables permiten controlar el uso del LLM, el modelo seleccionado y el comportamiento de reintentos/fallback.
+Estas variables permiten controlar el uso del LLM, el modelo seleccionado, el comportamiento de reintentos/fallback y las tarifas utilizadas para estimar el costo.
 
 ---
 
-## 24. Cumplimiento de la pauta EP3
+## 24. Cobertura técnica del Examen Transversal
 
-La implementación de observabilidad permite cubrir los principales criterios de la pauta de la Evaluación Parcial N°3.
+La versión final integra los principales componentes técnicos desarrollados durante el semestre y deja evidencia verificable de su funcionamiento.
 
-| Indicador | Cumplimiento en el proyecto |
+| Área integrada | Evidencia en el proyecto |
 |---|---|
-| IE1: Métricas de precisión, consistencia y errores | Se registran tasas de éxito LLM, fallback local, errores, evidencia promedio, evidencia débil y evidencia fuerte. |
-| IE2: Medición de latencia y recursos | Se mide latencia total, latencia por candidato, latencia por evaluación y cantidad de eventos LLM como aproximación al consumo operativo. |
-| IE3: Análisis de logs y trazabilidad | Se registra una bitácora completa de eventos por ejecución, asociada a un `trace_id`, tanto en flujo clásico como en modo agente. |
-| IE4: Identificación de patrones y anomalías | Se detectan anomalías como alto fallback, errores LLM, baja evidencia, ranking estrecho y latencia alta. |
-| IE5: Dashboard de observabilidad | Se implementó un dashboard visual en el frontend con métricas, anomalías, recomendaciones y uso responsable para ambos modos de ejecución. |
-| IE6: Seguridad, privacidad y uso responsable | Se explicita revisión humana obligatoria, alcance documental y exclusión de variables sensibles. |
-| IE7: Recomendaciones de sostenibilidad, escalabilidad y mejora | Se generan recomendaciones automáticas. Además, se implementó fallback rápido ante `429` para reducir latencia y mejorar resiliencia. |
-| IE8: Informe técnico con evidencia | Los reportes Markdown y JSON incluyen resultados del análisis y sección de observabilidad. |
-| IE9: Claridad técnica y documentación | El README documenta arquitectura, flujo, servicios, prompts, agente, observabilidad, archivos modificados y cumplimiento de pauta. |
+| Caso organizacional y problema | Se define un proceso de preselección documental aplicado al contexto de Salmones Camanchaca S.A. |
+| IA generativa y prompts | Se utilizan modelos de GitHub Models para deducir competencias y evaluar evidencia mediante instrucciones estructuradas. |
+| RAG | Los CV se fragmentan, indexan y consultan semánticamente antes de evaluar cada competencia. |
+| Agente LangChain | Existe un flujo alternativo con herramientas, planificación, decisiones adaptativas, memoria y `agent_trace`. |
+| Arquitectura y desarrollo | La solución separa frontend, API, servicios, modelos, agente, reportes y salidas persistentes. |
+| Observabilidad y trazabilidad | Se registran latencia, éxito LLM, fallback, errores, eventos, `trace_id`, anomalías y recomendaciones. |
+| Consumo de recursos del LLM | Se contabilizan tokens de entrada, salida y totales, con un costo estimado parametrizable en USD. |
+| Interfaz y evidencia de ejecución | El frontend muestra ranking, terna, progreso, trazabilidad, observabilidad y consumo del modelo. |
+| Reportes | Los resultados se persisten en Markdown y JSON, incluyendo observabilidad y `llm_usage`. |
+| Seguridad y uso responsable | Se excluyen variables sensibles y la decisión final permanece bajo revisión humana. |
+| Limitaciones declaradas | Se documenta que la planificación de `AgentExecutor` todavía no aporta sus tokens al contador compartido. |
 
 ### 24.1 Evidencia de cumplimiento
 
@@ -2064,7 +2199,7 @@ La aplicación genera evidencia en tres niveles:
 
 | Nivel | Evidencia |
 |---|---|
-| Frontend | Dashboard de observabilidad visible al finalizar el análisis. |
+| Frontend | Dashboard de observabilidad y sección de consumo del modelo visibles al finalizar el análisis. |
 | Backend | JSON de observabilidad en `app/backend/outputs/observability/`. |
 | Reporte | Markdown y JSON en `app/backend/outputs/reports/`. |
 | Agente | `agent_trace` y `observability` disponibles en el resultado del modo LangChain. |
@@ -2096,9 +2231,9 @@ Esta mejora es defendible porque nace directamente del análisis de logs y métr
 
 ---
 
-## 25. Estado final de la entrega EP3
+## 25. Estado final del Examen Transversal
 
-La entrega queda en estado funcional y defendible para observabilidad.
+La entrega queda en estado funcional y defendible como solución integrada para el Examen Transversal.
 
 ### Implementado
 
@@ -2107,6 +2242,12 @@ La entrega queda en estado funcional y defendible para observabilidad.
 - Servicio backend de observabilidad.
 - Métricas de latencia.
 - Métricas de uso LLM.
+- Conteo de tokens de entrada, salida y total.
+- Costo estimado parametrizable mediante variables de entorno.
+- Visualización de consumo en frontend.
+- Consumo incluido en reportes Markdown y JSON.
+- Conteo completo del pipeline clásico.
+- Conteo parcial documentado para el pipeline con agente.
 - Métricas de fallback local.
 - Métricas de errores.
 - Métricas de calidad de evidencia.
@@ -2121,21 +2262,32 @@ La entrega queda en estado funcional y defendible para observabilidad.
 ### Parcial o mejorable
 
 - No se implementó integración con Grafana, Kibana o herramientas externas.
-- No se midió consumo real de CPU, memoria ni costo monetario exacto por tokens. Sin embargo, la observabilidad sí registra métricas operativas asociadas al costo de uso del agente, como cantidad de llamadas LLM, fallback, errores, latencia total y latencia promedio por evaluación.
+- No se mide consumo real de CPU o memoria.
+- El costo monetario es una estimación basada en tarifas configurables y no una lectura de facturación del proveedor.
+- En modo agente no se contabilizan todavía los tokens de la planificación generada por `ChatOpenAI` y `AgentExecutor`; sí se cuentan las llamadas de deducción y evaluación.
+- Las tarifas son globales y deben actualizarse manualmente cuando se cambia a un modelo con precios diferentes.
 - Las anomalías se detectan mediante reglas simples, no mediante modelos estadísticos avanzados.
 - El dashboard es propio de la aplicación, no una solución externa especializada.
 - La evaluación de calidad usa evidencia documental como aproximación, no validación humana etiquetada.
 
 ### Justificación del alcance
 
-Para el contexto del prototipo académico, se priorizó una observabilidad integrada, simple y defendible, directamente conectada con el flujo real del agente. La solución permite demostrar métricas, trazabilidad, análisis de errores, dashboard, recomendaciones y uso responsable sin agregar infraestructura externa innecesaria.
+Para el contexto del prototipo académico, se priorizó una observabilidad integrada, simple y defendible. La solución permite demostrar métricas, trazabilidad, análisis de errores, tokens, costo estimado, dashboard, recomendaciones y uso responsable sin agregar infraestructura externa innecesaria. La cobertura parcial de la planificación LangChain queda declarada explícitamente para no presentar el costo del modo agente como una medición exacta.
 
 ---
 
-## 26. Conclusión actualizada para EP3
+## 26. Conclusión final del Examen Transversal
 
 La aplicación evolucionó desde un prototipo RAG para evaluación documental hacia una solución con observabilidad integrada. Además de deducir competencias, evaluar CV y generar ranking, ahora el sistema registra métricas de ejecución, detecta anomalías, genera recomendaciones y deja evidencia técnica en dashboard, JSON y reportes Markdown. Esta observabilidad se encuentra disponible tanto para el flujo clásico como para el flujo alternativo con agente LangChain.
 
 La mejora más relevante fue identificar, mediante logs, que ciertos modelos podían generar latencias elevadas por errores `429 Too Many Requests`. A partir de ese hallazgo se implementó fallback rápido, reduciendo la dependencia de reintentos prolongados y mejorando la continuidad del análisis.
 
-Con esta actualización, el proyecto no solo entrega resultados de IA, sino también evidencia sobre cómo se comporta el agente, qué tan estable fue la ejecución, cuándo se usó fallback, qué anomalías se detectaron y qué acciones de mejora se recomiendan. Esto permite defender la solución desde una perspectiva técnica, ética y operacional.
+Con esta actualización, el proyecto no solo entrega resultados de IA, sino también evidencia sobre cómo se comporta el sistema, qué tan estable fue la ejecución, cuándo se usó fallback, cuántos tokens consumió el pipeline y cuál fue su costo aproximado. Esta información se visualiza en el frontend y queda persistida en los reportes Markdown y JSON.
+
+El conteo es completo para las llamadas del flujo clásico. En el modo agente se contabilizan las llamadas de deducción y evaluación, pero queda pendiente incorporar los tokens de la planificación ejecutada mediante `ChatOpenAI` y `AgentExecutor`. Esta limitación se mantiene documentada para asegurar una interpretación transparente de los resultados.
+
+## Uso de IA en el desarrollo
+
+Durante el desarrollo se utilizó **ChatGPT de OpenAI**, principalmente con el modelo **GPT-5.6 Thinking**, como herramienta de apoyo para analizar requerimientos, proponer código, revisar errores y mejorar la documentación.
+
+Se trabajó mediante una metodología incremental: se implementó un cambio pequeño, se ejecutó una prueba y se revisó el resultado antes de continuar. Todo el código sugerido por IA fue revisado, adaptado y validado manualmente antes de incorporarlo al proyecto.

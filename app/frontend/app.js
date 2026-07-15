@@ -391,6 +391,7 @@ async function pollAnalysisProgress(jobId, endpoints) {
           renderCompetencies(result.competencies || []);
           renderTerna(result.recommended_terna || result.terna || []);
           renderRanking(result.ranking || []);
+          renderLLMUsage(result.llm_usage || null);
           renderReport(result.report || null);
           renderObservability(result.observability || null);
           renderAgentTrace(result.agent_trace || null);
@@ -504,6 +505,13 @@ function clearPreviousResults() {
   $("ranking").className = "ranking-list empty";
   $("ranking").textContent = "Análisis en curso...";
 
+  const llmUsage = $("llmUsage");
+
+  if (llmUsage) {
+    llmUsage.className = "observability-dashboard empty";
+    llmUsage.textContent = "El consumo aparecerá al finalizar el análisis...";
+  }
+
   $("report").className = "report-box empty";
   $("report").textContent = "El reporte se generará al finalizar el análisis...";
 
@@ -520,6 +528,81 @@ function clearPreviousResults() {
     observability.className = "observability-dashboard empty";
     observability.textContent = "Las métricas de observabilidad aparecerán al finalizar el análisis...";
   }
+}
+
+/**
+ * Muestra los tokens utilizados y el costo estimado del análisis.
+ *
+ * Los cálculos se realizan en el backend. El frontend solamente
+ * presenta los valores recibidos en llm_usage.
+ */
+function renderLLMUsage(usage) {
+  const container = $("llmUsage");
+
+  if (!container) return;
+
+  if (!usage) {
+    container.className = "observability-dashboard empty";
+    container.textContent = "No se registraron datos de consumo del modelo.";
+    return;
+  }
+
+  const promptTokens = Number(usage.prompt_tokens || 0);
+  const completionTokens = Number(usage.completion_tokens || 0);
+  const totalTokens = Number(usage.total_tokens || 0);
+
+  const inputCost = Number(usage.estimated_input_cost_usd || 0);
+  const outputCost = Number(usage.estimated_output_cost_usd || 0);
+  const totalCost = Number(usage.estimated_total_cost_usd || 0);
+
+  const inputPrice = Number(
+    usage.input_cost_per_1m_tokens_usd || 0
+  );
+
+  const outputPrice = Number(
+    usage.output_cost_per_1m_tokens_usd || 0
+  );
+
+  container.className = "observability-dashboard";
+
+  container.innerHTML = `
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <span class="metric-label">Tokens de entrada</span>
+        <strong>${promptTokens.toLocaleString("es-CL")}</strong>
+        <small>Costo estimado: USD ${inputCost.toFixed(8)}</small>
+      </div>
+
+      <div class="metric-card">
+        <span class="metric-label">Tokens de salida</span>
+        <strong>${completionTokens.toLocaleString("es-CL")}</strong>
+        <small>Costo estimado: USD ${outputCost.toFixed(8)}</small>
+      </div>
+
+      <div class="metric-card">
+        <span class="metric-label">Tokens totales</span>
+        <strong>${totalTokens.toLocaleString("es-CL")}</strong>
+        <small>Suma de entrada y salida</small>
+      </div>
+
+      <div class="metric-card">
+        <span class="metric-label">Costo total estimado</span>
+        <strong>USD ${totalCost.toFixed(8)}</strong>
+        <small>No corresponde necesariamente a un cobro real</small>
+      </div>
+    </div>
+
+    <div class="observability-footer">
+      <strong>Modelo:</strong>
+      ${escapeHtml(usage.model || "No informado")}
+      ·
+      <strong>Tarifa de entrada:</strong>
+      USD ${inputPrice} por 1M tokens
+      ·
+      <strong>Tarifa de salida:</strong>
+      USD ${outputPrice} por 1M tokens
+    </div>
+  `;
 }
 
 /**
